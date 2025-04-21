@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	Port            = 8080
-	Host            = "localhost"
-	TotalTests      = 500
-	WaitSleep       = 1 * time.Second
+	Port       = 8080
+	Host       = "localhost"
+	TotalTests = 500
+	WaitSleep  = 1 * time.Second
 )
 
 type HashRequest struct {
@@ -33,7 +33,7 @@ type HashResponse struct {
 
 var (
 	logger  = fancylogger.NewLogger(os.Stdout, fancylogger.LiteFg)
-	quitReq = assertNoErr(json.Marshal(HashRequest{"quit", 0}))
+	quitReq = perform.AssertNoErr(json.Marshal(HashRequest{"quit", 0}))
 )
 
 func main() {
@@ -44,7 +44,7 @@ func main() {
 
 	requestUrl := fmt.Sprintf("http://%s:%d", Host, Port)
 	pwdReq := HashRequest{"A secret", *strength}
-	jsonString := assertNoErr(json.Marshal(pwdReq))
+	jsonString := perform.AssertNoErr(json.Marshal(pwdReq))
 	task := func() error { return sendOneRequest(requestUrl, jsonString) }
 
 	waitServer(requestUrl, 5*time.Minute)
@@ -53,7 +53,7 @@ func main() {
 	stats := perform.RunTest([]perform.TestTask{task}, TotalTests, *concur)
 	elapsedTime := time.Since(startTime)
 
-	assertNoErr(struct{}{}, sendOneRequest(requestUrl, []byte(quitReq)))
+	perform.AssertNoErr(perform.ND, sendOneRequest(requestUrl, []byte(quitReq)))
 
 	logger.Info().Msgf("Test finished for the factor %d:", pwdReq.Strength)
 	logger.Info().Int("  num tests", stats[0].Count).Send()
@@ -66,13 +66,6 @@ func main() {
 	logger.Info().Dur("  min (ms)", stats[0].MinTime).Send()
 	logger.Info().Dur("  avg (ms)", stats[0].AvgTime).Send()
 	logger.Info().Dur("  stdev (ms)", stats[0].StdDev).Send()
-}
-
-func assertNoErr[T any](val T, err error) T {
-	if err != nil {
-		logger.Fatal().Err(err)
-	}
-	return val
 }
 
 func sendOneRequest(url string, jsonString []byte) error {

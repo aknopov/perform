@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/aknopov/fancylogger"
+	"github.com/aknopov/perform"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,11 +22,11 @@ func startGin(port int) {
 
 	engine := gin.New()
 	engine.Use(gin.Recovery()) // no debug logging
-	assertNoErr(engine.SetTrustedProxies(nil))
+	perform.AssertNoErr(perform.ND, engine.SetTrustedProxies(nil))
 	engine.POST("/", hashPassword4Gin)
 
 	logger.Info().Msg("-- Starting server...")
-	go func() { assertNoErr(engine.Run(fmt.Sprintf(":%d", port))) }()
+	go func() { perform.AssertNoErr(perform.ND, engine.Run(fmt.Sprintf(":%d", port))) }()
 
 	<-stopChan
 	os.Exit(0)
@@ -34,11 +35,11 @@ func startGin(port int) {
 func hashPassword4Gin(ctx *gin.Context) {
 	request := new(HashRequest)
 
-	assertNoErr(ctx.BindJSON(&request))
+	perform.AssertNoErr(perform.ND, ctx.BindJSON(&request))
 
 	if request.Password == "quit" {
 		logger.Info().Msg("-- Stopping server...")
-		stopChan <- struct{}{}
+		stopChan <- perform.ND
 		return
 	}
 
