@@ -9,16 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// var (
-// 	writer = os.Stdout
-// )
-
 func TestParamTypeCoverage(t *testing.T) {
 	assertT := assert.New(t)
 
 	// collect all enum values
 	allParams := make([]ParamType, 0)
-	for p := paramTypeLast; p >= paramTypeFirst; p-- {
+	for p := paramLast; p >= paramFirst; p-- {
 		allParams = append(allParams, p)
 	}
 
@@ -39,20 +35,20 @@ func TestParseParamList(t *testing.T) {
 	assertT := assert.New(t)
 
 	var paramList ParamList
-	assertT.Nil(parseParamList("CpuPerc,MemPerc,CpuTime", &paramList))
-	assertT.ElementsMatch([]ParamType{CpuPerc, MemPerc, CpuTime}, paramList)
+	assertT.Nil(parseParamList("Cpu,Mem", &paramList))
+	assertT.ElementsMatch([]ParamType{Cpu, Mem}, paramList)
 
 	paramList = paramList[0:0]
-	assertT.Nil(parseParamList("CpuTime,CpuPerc,MemPerc", &paramList))
-	assertT.ElementsMatch([]ParamType{CpuTime, CpuPerc, MemPerc}, paramList)
+	assertT.Nil(parseParamList("Cpu,Mem,PIDs,CPUs,Rx,Tx", &paramList))
+	assertT.ElementsMatch([]ParamType{Cpu, Mem, PIDs, CPUs, Rx, Tx}, paramList)
 
 	paramList = paramList[0:0]
-	assertT.Nil(parseParamList("CpuPerc, MemPerc,CpuTime", &paramList))
-	assertT.ElementsMatch([]ParamType{CpuPerc, MemPerc, CpuTime}, paramList)
+	assertT.Nil(parseParamList("Cpu, Mem", &paramList))
+	assertT.ElementsMatch([]ParamType{Cpu, Mem}, paramList)
 
 	paramList = paramList[0:0]
-	assertT.Nil(parseParamList("CpuPerc,MemPerc, Foo", &paramList))
-	assertT.ElementsMatch([]ParamType{CpuPerc, MemPerc}, paramList)
+	assertT.Nil(parseParamList("Cpu,Mem, Foo", &paramList))
+	assertT.ElementsMatch([]ParamType{Cpu, Mem}, paramList)
 }
 
 // Google AI generate
@@ -69,18 +65,18 @@ func TestParseParams(t *testing.T) {
 	}{
 		{
 			name:       "Normal",
-			args:       []string{"-params=", "CpuPerc, MemPerc", "ID"},
+			args:       []string{"-params=", "Cpu, Mem", "ID"},
 			expName:    "ID",
 			expIntvl:   1.0,
-			expParms:   []ParamType{CpuPerc, MemPerc},
+			expParms:   []ParamType{Cpu, Mem},
 			shouldFail: false,
 		},
 		{
 			name:       "Normal",
-			args:       []string{"-params=", "CpuPerc, CpuTime", "-refresh=", "10", "ID"},
+			args:       []string{"-params=", "Cpu, Mem", "-refresh=", "10", "ID"},
 			expName:    "ID",
 			expIntvl:   1.0,
-			expParms:   []ParamType{CpuPerc, CpuTime},
+			expParms:   []ParamType{Cpu, Mem},
 			shouldFail: false,
 		},
 		{
@@ -108,19 +104,6 @@ func TestParseParams(t *testing.T) {
 	}
 }
 
-// UC to docker-stat
-//  func TestUsagePrintout(t *testing.T) {
-// 	assertT := assert.New(t)
-
-// 	stream, ch := createStream()
-
-// 	flagSet := flag.NewFlagSet("test", flag.ContinueOnError)
-// 	_, _, _, _ = ParseParams(flagSet, []string{})
-
-// 	output := readStream(stream, ch)
-// 	assertT.True(strings.HasPrefix(output, "\nLogs Docker container statistics\nUsage: test -refresh=... -params=... containerId"))
-// }
-
 func TestPrintHeader(t *testing.T) {
 	assertT := assert.New(t)
 
@@ -130,7 +113,7 @@ func TestPrintHeader(t *testing.T) {
 	PrintHeader(stream, &paramList)
 
 	output := ReadStream(stream, ch)
-	assertT.Equal("Time                            CPUs    Tx MBps\n", output)
+	assertT.Equal("Time                              CPUs    Tx MBps\n", output)
 
 }
 
@@ -144,5 +127,5 @@ func TestPrintValues(t *testing.T) {
 	output := ReadStream(stream, ch)
 	tsRex := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} .*`)
 	assertT.True(tsRex.MatchString(output))
-	assertT.True(strings.HasSuffix(output, "         1.00      13.00\n"))
+	assertT.True(strings.HasSuffix(output, "         1.00       13.00\n"))
 }
