@@ -1,0 +1,16 @@
+all: false
+dir: './monitor/docker-stat'
+filename: mocks_test.go
+force-file-write: true
+formatter: goimports
+log-level: info
+structname: '{{.Mock}}{{.InterfaceName}}'
+pkgname: 'main'
+recursive: false
+require-template-schema-exists: true
+template: testify
+template-schema: '{{.Template}}.schema.json'
+packages:
+  github.com/docker/docker/client:
+    interfaces:
+      ContainerAPIClient:
