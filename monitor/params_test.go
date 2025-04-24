@@ -1,7 +1,6 @@
 package monitor
 
 import (
-	"flag"
 	"regexp"
 	"strings"
 	"testing"
@@ -65,7 +64,7 @@ func TestParseParams(t *testing.T) {
 	}{
 		{
 			name:       "Normal",
-			args:       []string{"-params=", "Cpu, Mem", "ID"},
+			args:       []string{"test", "-params=", "Cpu, Mem", "ID"},
 			expName:    "ID",
 			expIntvl:   1.0,
 			expParms:   []ParamType{Cpu, Mem},
@@ -73,7 +72,7 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name:       "Normal",
-			args:       []string{"-params=", "Cpu, Mem", "-refresh=", "10", "ID"},
+			args:       []string{"test", "-params=", "Cpu, Mem", "-refresh=", "10", "ID"},
 			expName:    "ID",
 			expIntvl:   1.0,
 			expParms:   []ParamType{Cpu, Mem},
@@ -81,7 +80,7 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name:       "No ID",
-			args:       []string{"-params=", "CpuPerc, MemPerc"},
+			args:       []string{"test", "-params=", "CpuPerc, MemPerc"},
 			expName:    "",
 			expIntvl:   1.0,
 			expParms:   []ParamType{},
@@ -90,8 +89,7 @@ func TestParseParams(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		flagSet := flag.NewFlagSet("test", flag.ContinueOnError)
-		name, params, intvl, err := ParseParams(flagSet, tc.args)
+		name, params, intvl, err := ParseParams(tc.args, func(){})
 
 		if !tc.shouldFail {
 			assertT.NoError(err, "In test", tc.name)
@@ -122,7 +120,7 @@ func TestPrintValues(t *testing.T) {
 
 	stream, ch := CreateStream()
 
-	PrintValues(stream, []float32{1.0, 13.0})
+	PrintValues(stream, []float64{1.0, 13.0})
 
 	output := ReadStream(stream, ch)
 	tsRex := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} .*`)

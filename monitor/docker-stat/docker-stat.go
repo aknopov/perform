@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -17,10 +15,10 @@ import (
 )
 
 func main() {
-	progName := filepath.Base(os.Args[0])
-	containerId, paramList, refreshSec, err := monitor.ParseParams(flag.NewFlagSet(progName, flag.ExitOnError), os.Args[1:])
+	containerId, paramList, refreshSec, err := monitor.ParseParams(os.Args, func() { usage(os.Stderr) })
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Container ID is missing")
+		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
+		usage(os.Stderr)
 		os.Exit(1)
 	}
 	refreshPeriod := time.Duration(int64(refreshSec * float64(time.Second)))
@@ -30,14 +28,13 @@ func main() {
 	dockerInfo, err := apiClient.Info(context.Background())
 	assertNoErr(err, "Failed to get Docker info - is daemon running?")
 
+	monitor.PrintHeader(os.Stdout, paramList)
 	pollStats(paramList, refreshPeriod, apiClient, &dockerInfo, containerId)
 }
 
 func pollStats(paramList *monitor.ParamList, refreshPeriod time.Duration, apiClient client.ContainerAPIClient, dockerInfo *system.Info, containerId string) {
 
-	monitor.PrintHeader(os.Stdout, paramList)
-
-	values := make([]float32, len(*paramList))
+	values := make([]float64, len(*paramList))
 	ticker := time.NewTicker(refreshPeriod)
 	for range ticker.C {
 		stats, err := getContainerInfo(apiClient, containerId)
@@ -81,14 +78,14 @@ func isContainerAlive(stats *container.StatsResponse) bool {
 	return stats.CPUStats.OnlineCPUs != 0
 }
 
-func getValue(dockerInfo *system.Info, stats *container.StatsResponse, param monitor.ParamType) float32 {
+func getValue(dockerInfo *system.Info, stats *container.StatsResponse, param monitor.ParamType) float64 {
 	switch param {
 	case monitor.CPUs:
-		return float32(stats.CPUStats.OnlineCPUs)
+		return float64(stats.CPUStats.OnlineCPUs)
 	case monitor.Mem:
-		return float32(stats.MemoryStats.Usage / 1024)
+		return float64(stats.MemoryStats.Usage / 1024)
 	case monitor.PIDs:
-		return float32(stats.PidsStats.Current)
+		return float64(stats.PidsStats.Current)
 	case monitor.Rx:
 		rx, _ := calcNetIO(stats)
 		return rx
@@ -96,7 +93,7 @@ func getValue(dockerInfo *system.Info, stats *container.StatsResponse, param mon
 		_, tx := calcNetIO(stats)
 		return tx
 	case monitor.Cpu:
-		return float32((stats.CPUStats.CPUUsage.UsageInUsermode + stats.CPUStats.CPUUsage.UsageInKernelmode) / uint64(time.Millisecond))
+		return float64((stats.CPUStats.CPUUsage.UsageInUsermode + stats.CPUStats.CPUUsage.UsageInKernelmode) / uint64(time.Millisecond))
 	default:
 		panic("Parameter value " + strconv.Itoa(int(param)) + " not recognised")
 	}
@@ -127,7 +124,7 @@ func calcCpu(stats *container.StatsResponse) float32 {
 	return float32(float64(userDelta+kernelDelta)/float64(totalDelta)) * 100.0 * float32(stats.CPUStats.OnlineCPUs)
 }
 
-func calcNetIO(stats *container.StatsResponse) (float32, float32) {
+func calcNetIO(stats *container.StatsResponse) (float64, float64) {
 	var rxTotal uint64 = 0
 	var txTotal uint64 = 0
 	for _, ns := range stats.Networks {
@@ -145,6 +142,20 @@ func calcNetIO(stats *container.StatsResponse) (float32, float32) {
 		return 0.0, 0.0
 	}
 
-	deltaSec := float32(float64(timeDelta) / float64(time.Second))
-	return float32(rxDelta) / deltaSec / 1024, float32(txDelta) / deltaSec / 1024
+	deltaSec := float64(timeDelta) / float64(time.Second)
+	return float64(rxDelta) / deltaSec / 1024, float64(txDelta) / deltaSec / 1024
+}
+
+func usage(sink *os.File) {
+	fmt.Fprintln(sink, `Docker container performance statistics
+Usage: docker-stat -refresh=... -params=... containerId
+  containerId - container name or ID
+-refresh - interval in seconds (default 1.0 sec)
+-params - comma separated list of
+  Cpu - total CPU time (msec) spent on runing container
+  Mem - container memory usage (KB)
+  PIDs - number of container threads
+  CPUs - number of processors available to the container
+  Rx - total network read rate (KBs)
+  Tx - total network write rate (KBs)`)
 }

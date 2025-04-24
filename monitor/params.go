@@ -5,11 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"strings"
-
-	"github.com/aknopov/perform"
 )
 
 type ParamType int
@@ -67,31 +66,24 @@ func parseParamList(flagValues string, paramList *ParamList) error {
 }
 
 // Parses commandline; returns program name,  monitored parameters list, monitoring frequency
-func ParseParams(flagSet *flag.FlagSet, args []string) (string, *ParamList, float64, error) {
+func ParseParams(args []string, usage func()) (string, *ParamList, float64, error) {
+	progName := filepath.Base(args[0])
+	flagSet := flag.NewFlagSet(progName, flag.ContinueOnError)
+	flagSet.Usage = usage
+
 	var paramList ParamList
 	var refreshSec float64
-	flagSet.Usage = func() {
-		fmt.Fprintln(os.Stderr, "Logs Docker container statistics")
-		fmt.Fprintf(os.Stderr, "Usage: %s -refresh=... -params=... containerId\n", flagSet.Name())
-		fmt.Fprintln(os.Stderr, "  containerId - container name or ID")
-		fmt.Fprintln(os.Stderr, "  -refresh - interval in seconds (default 1.0 sec)")
-		fmt.Fprintln(os.Stderr, "  -params - comma separated list of")
-		fmt.Fprintln(os.Stderr, "    Cpu - total CPU time spent on runing container")
-		fmt.Fprintln(os.Stderr, "    Mem - process memory")
-		fmt.Fprintln(os.Stderr, "    PIDs - number of container threads")
-		fmt.Fprintln(os.Stderr, "    CPUs - number of host processors available to container")
-		fmt.Fprintln(os.Stderr, "    Rx - total network read rate (KBs)")
-		fmt.Fprintln(os.Stderr, "    Tx - total network write rate (KBs)")
-	}
 	flagSet.Float64Var(&refreshSec, "refresh", 1.0, "")
 	flagSet.Func("params", "", func(f string) error { return parseParamList(f, &paramList) })
-	perform.AssertNoErr(perform.ND, flagSet.Parse(args))
+
+	err := flagSet.Parse(args[1:])
+	if err != nil {
+		return "", nil, 0, err
+	}
 
 	otherArgs := flagSet.Args()
 	if len(otherArgs) < 1 {
-		fmt.Fprintln(os.Stderr)
-		flagSet.Usage()
-		return "", nil, 0, errors.New("container ID is missing")
+		return "", nil, 0, errors.New("container/process ID is missing")
 	}
 
 	return otherArgs[0], &paramList, refreshSec, nil
@@ -107,7 +99,7 @@ func PrintHeader(sink *os.File, paramList *ParamList) {
 }
 
 // Prints values of monitored parameters
-func PrintValues(sink *os.File, values []float32) {
+func PrintValues(sink *os.File, values []float64) {
 	fmt.Fprint(sink, time.Now().Format("2006-01-02 15:04:05.000  "))
 	for _, v := range values {
 		fmt.Fprintf(sink, " %*.2f", colWidth, v)

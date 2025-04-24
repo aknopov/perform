@@ -11,7 +11,6 @@ import (
 
 	"github.com/aknopov/perform/monitor"
 	"github.com/docker/docker/api/types/container"
-	. "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/system"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,52 +21,52 @@ var (
 		MemTotal: 768 * 1024 * 1024,
 	}
 
-	stats1 StatsResponse = StatsResponse{
+	stats1 container.StatsResponse = container.StatsResponse{
 		Read: time.Unix(100, 0),
-		Networks: map[string]NetworkStats{
+		Networks: map[string]container.NetworkStats{
 			"lo": {
 				RxBytes: 123 * 1024,
 				TxBytes: 512 * 1024,
 			},
 		},
-		CPUStats: CPUStats{
+		CPUStats: container.CPUStats{
 			OnlineCPUs: 5,
-			CPUUsage: CPUUsage{
+			CPUUsage: container.CPUUsage{
 				TotalUsage:        10000000000,
 				UsageInUsermode:   20000000,
 				UsageInKernelmode: 1000000,
 			},
 		},
-		MemoryStats: MemoryStats{
+		MemoryStats: container.MemoryStats{
 			Usage: 3 * 1024 * 1024,
 			Limit: 6 * 1024 * 1024,
 		},
-		PidsStats: PidsStats{
+		PidsStats: container.PidsStats{
 			Current: 12,
 		},
 	}
 
-	stats2 StatsResponse = StatsResponse{
+	stats2 container.StatsResponse = container.StatsResponse{
 		Read: time.Unix(200, 0),
-		Networks: map[string]NetworkStats{
+		Networks: map[string]container.NetworkStats{
 			"eth0": {
 				RxBytes: 125 * 1024,
 				TxBytes: 522 * 1024,
 			},
 		},
-		CPUStats: CPUStats{
+		CPUStats: container.CPUStats{
 			OnlineCPUs: 5,
-			CPUUsage: CPUUsage{
+			CPUUsage: container.CPUUsage{
 				TotalUsage:        20000000000,
 				UsageInUsermode:   30000000,
 				UsageInKernelmode: 2000000,
 			},
 		},
-		MemoryStats: MemoryStats{
+		MemoryStats: container.MemoryStats{
 			Usage: 3 * 1024 * 1024,
 			Limit: 6 * 1024 * 1024,
 		},
-		PidsStats: PidsStats{
+		PidsStats: container.PidsStats{
 			Current: 12,
 		},
 	}
@@ -85,7 +84,7 @@ func TestAssertNoErr(t *testing.T) {
 func TestIsContainerAlive(t *testing.T) {
 	assertT := assert.New(t)
 
-	var stats StatsResponse
+	var stats container.StatsResponse
 
 	stats.CPUStats.OnlineCPUs = 3
 	assertT.True(isContainerAlive(&stats))
@@ -112,7 +111,7 @@ func TestPrintValues(t *testing.T) {
 
 	stream, ch := monitor.CreateStream()
 
-	monitor.PrintValues(stream, []float32{1.0, 13.0})
+	monitor.PrintValues(stream, []float64{1.0, 13.0})
 
 	output := monitor.ReadStream(stream, ch)
 	tsRex := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} .*`)
@@ -129,8 +128,8 @@ func TestCalcNetIO(t *testing.T) {
 	assertT.Zero(txRate)
 
 	rxRate, txRate = calcNetIO(&stats2)
-	assertT.Equal(float32(0.02), rxRate)
-	assertT.Equal(float32(0.1), txRate)
+	assertT.Equal(0.02, rxRate)
+	assertT.Equal(0.1, txRate)
 }
 
 func TestCalcCpu(t *testing.T) {
@@ -152,21 +151,15 @@ func TestGetValue(t *testing.T) {
 	prevRx = 0
 	prevTx = 0
 
-	// assertT.Equal(float32(13.0), getValue(&dockerInfo, &stats1, monitor.NumProcs))
-	// assertT.Equal(float32(768.0), getValue(&dockerInfo, &stats1, monitor.RamMB))
-	assertT.Equal(float32(5.0), getValue(&dockerInfo, &stats1, monitor.CPUs))
-	// getValue(&dockerInfo, &stats1, monitor.CpuPerc)
-	// assertT.Equal(float32(0.55), getValue(&dockerInfo, &stats2, monitor.CpuPerc))
-	// getValue(&dockerInfo, &stats1, monitor.MemPerc)
-	// assertT.Equal(float32(50.0), getValue(&dockerInfo, &stats2, monitor.MemPerc))
-	assertT.Equal(float32(12.0), getValue(&dockerInfo, &stats1, monitor.PIDs))
-	assertT.Equal(float32(21.0), getValue(&dockerInfo, &stats1, monitor.Cpu))
-	assertT.Equal(float32(21.0), getValue(&dockerInfo, &stats1, monitor.Cpu))
-	assertT.Equal(float32(21.0), getValue(&dockerInfo, &stats1, monitor.Cpu))
+	assertT.Equal(5.0, getValue(&dockerInfo, &stats1, monitor.CPUs))
+	assertT.Equal(12.0, getValue(&dockerInfo, &stats1, monitor.PIDs))
+	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, monitor.Cpu))
+	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, monitor.Cpu))
+	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, monitor.Cpu))
 	getValue(&dockerInfo, &stats1, monitor.Rx)
-	assertT.Equal(float32(0.02), getValue(&dockerInfo, &stats2, monitor.Rx))
+	assertT.Equal(0.02, getValue(&dockerInfo, &stats2, monitor.Rx))
 	getValue(&dockerInfo, &stats1, monitor.Tx)
-	assertT.Equal(float32(0.1), getValue(&dockerInfo, &stats2, monitor.Tx))
+	assertT.Equal(0.1, getValue(&dockerInfo, &stats2, monitor.Tx))
 
 	assertT.Panics(func() { getValue(&dockerInfo, &stats1, monitor.Tx+100) })
 }
@@ -223,15 +216,13 @@ func TestPollStats(t *testing.T) {
 	pollStats(&monitor.ParamList{monitor.Cpu, monitor.Mem}, 20*time.Millisecond, mockApiClient, &dockerInfo, "ID")
 }
 
-// UC to docker-stat
-//  func TestUsagePrintout(t *testing.T) {
-// 	assertT := assert.New(t)
+func TestUsagePrintout(t *testing.T) {
+	assertT := assert.New(t)
 
-// 	stream, ch := createStream()
+	stream, ch := monitor.CreateStream()
 
-// 	flagSet := flag.NewFlagSet("test", flag.ContinueOnError)
-// 	_, _, _, _ = ParseParams(flagSet, []string{})
+	usage(stream)
 
-// 	output := readStream(stream, ch)
-// 	assertT.True(strings.HasPrefix(output, "\nLogs Docker container statistics\nUsage: test -refresh=... -params=... containerId"))
-// }
+	output := monitor.ReadStream(stream, ch)
+	assertT.True(strings.HasPrefix(output, "Docker container performance statistics\nUsage: docker-stat -refresh=... -params=... containerId"))
+}
