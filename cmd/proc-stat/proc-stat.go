@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/aknopov/perform"
-	"github.com/aknopov/perform/monitor"
+	"github.com/aknopov/perform/cmd/param"
 	ps "github.com/mitchellh/go-ps"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/net"
@@ -23,7 +23,7 @@ var (
 )
 
 func main() {
-	cmd, paramList, refreshSec, err := monitor.ParseParams(os.Args, func() { usage(os.Stderr) })
+	cmd, paramList, refreshSec, err := param.ParseParams(os.Args, func() { usage(os.Stderr) })
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
 		usage(os.Stderr)
@@ -36,11 +36,11 @@ func main() {
 	pid := perform.AssertNoErr(getProcPid(cmd))
 	p, _ := process.NewProcess(int32(pid))
 
-	monitor.PrintHeader(os.Stdout, paramList)
+	param.PrintHeader(os.Stdout, paramList)
 	pollStats(p, paramList, refreshPeriod)
 }
 
-func pollStats(proc *process.Process, paramList *monitor.ParamList, refreshPeriod time.Duration) {
+func pollStats(proc *process.Process, paramList *param.ParamList, refreshPeriod time.Duration) {
 
 	// _ = perform.AssertNoErr(p.Percent(0))
 
@@ -64,39 +64,39 @@ func pollStats(proc *process.Process, paramList *monitor.ParamList, refreshPerio
 			values[i] = getValue(proc, netInfo, p)
 		}
 
-		monitor.PrintValues(os.Stdout, values)
+		param.PrintValues(os.Stdout, values)
 	}
 }
 
-func checkIfNetAsked(paramList *monitor.ParamList) bool {
+func checkIfNetAsked(paramList *param.ParamList) bool {
 	for _, p := range *paramList {
-		if p == monitor.Tx || p == monitor.Rx {
+		if p == param.Tx || p == param.Rx {
 			return true
 		}
 	}
 	return false
 }
 
-func getValue(proc *process.Process, netInfo []net.IOCountersStat, p monitor.ParamType) float64 {
+func getValue(proc *process.Process, netInfo []net.IOCountersStat, p param.ParamType) float64 {
 
 	switch p {
-	case monitor.Cpu:
+	case param.Cpu:
 		ts := perform.AssumeOnErr(proc.Times, NO_TIMESTAT)
 		return ts.User + ts.System // Also: Total()
-	case monitor.Mem:
+	case param.Mem:
 		memInfo := perform.AssumeOnErr(proc.MemoryInfo, NO_MEMSTAT)
 		return float64(memInfo.RSS) / 1024
-	case monitor.CPUs:
+	case param.CPUs:
 		return float64(runtime.NumCPU())
-	case monitor.PIDs:
+	case param.PIDs:
 		return float64(perform.AssumeOnErr(proc.NumThreads, -1))
-	case monitor.Tx:
+	case param.Tx:
 		var txBytes uint64
 		for _, ni := range netInfo {
 			txBytes += ni.BytesSent
 		}
 		return float64(txBytes)
-	case monitor.Rx:
+	case param.Rx:
 		var rxBytes uint64
 		for _, ni := range netInfo {
 			rxBytes += ni.BytesRecv

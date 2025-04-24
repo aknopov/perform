@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aknopov/perform/monitor"
+	"github.com/aknopov/perform/cmd/param"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/system"
 	"github.com/stretchr/testify/assert"
@@ -96,12 +96,12 @@ func TestIsContainerAlive(t *testing.T) {
 func TestPrintHeader(t *testing.T) {
 	assertT := assert.New(t)
 
-	stream, ch := monitor.CreateStream()
+	stream, ch := param.CreateStream()
 
-	var paramList monitor.ParamList = monitor.ParamList{monitor.CPUs, monitor.Tx}
-	monitor.PrintHeader(stream, &paramList)
+	var paramList param.ParamList = param.ParamList{param.CPUs, param.Tx}
+	param.PrintHeader(stream, &paramList)
 
-	output := monitor.ReadStream(stream, ch)
+	output := param.ReadStream(stream, ch)
 	assertT.Equal("Time                              CPUs    Tx MBps\n", output)
 
 }
@@ -109,11 +109,11 @@ func TestPrintHeader(t *testing.T) {
 func TestPrintValues(t *testing.T) {
 	assertT := assert.New(t)
 
-	stream, ch := monitor.CreateStream()
+	stream, ch := param.CreateStream()
 
-	monitor.PrintValues(stream, []float64{1.0, 13.0})
+	param.PrintValues(stream, []float64{1.0, 13.0})
 
-	output := monitor.ReadStream(stream, ch)
+	output := param.ReadStream(stream, ch)
 	tsRex := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} .*`)
 	assertT.True(tsRex.MatchString(output))
 	assertT.True(strings.HasSuffix(output, "         1.00       13.00\n"))
@@ -151,17 +151,17 @@ func TestGetValue(t *testing.T) {
 	prevRx = 0
 	prevTx = 0
 
-	assertT.Equal(5.0, getValue(&dockerInfo, &stats1, monitor.CPUs))
-	assertT.Equal(12.0, getValue(&dockerInfo, &stats1, monitor.PIDs))
-	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, monitor.Cpu))
-	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, monitor.Cpu))
-	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, monitor.Cpu))
-	getValue(&dockerInfo, &stats1, monitor.Rx)
-	assertT.Equal(0.02, getValue(&dockerInfo, &stats2, monitor.Rx))
-	getValue(&dockerInfo, &stats1, monitor.Tx)
-	assertT.Equal(0.1, getValue(&dockerInfo, &stats2, monitor.Tx))
+	assertT.Equal(5.0, getValue(&dockerInfo, &stats1, param.CPUs))
+	assertT.Equal(12.0, getValue(&dockerInfo, &stats1, param.PIDs))
+	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, param.Cpu))
+	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, param.Cpu))
+	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, param.Cpu))
+	getValue(&dockerInfo, &stats1, param.Rx)
+	assertT.Equal(0.02, getValue(&dockerInfo, &stats2, param.Rx))
+	getValue(&dockerInfo, &stats1, param.Tx)
+	assertT.Equal(0.1, getValue(&dockerInfo, &stats2, param.Tx))
 
-	assertT.Panics(func() { getValue(&dockerInfo, &stats1, monitor.Tx+100) })
+	assertT.Panics(func() { getValue(&dockerInfo, &stats1, param.Tx+100) })
 }
 
 // https://vektra.github.io/mockery/latest/#why-mockery
@@ -212,17 +212,16 @@ func TestPollStats(t *testing.T) {
 	mockApiClient.EXPECT().ContainerStatsOneShot(context.Background(), "ID").Return(resp2, nil).Once()
 	mockApiClient.EXPECT().ContainerStatsOneShot(context.Background(), "ID").Return(resp3, nil).Once()
 
-	// pollStats(&monitor.ParamList{monitor.CpuPerc, monitor.MemPerc}, 20*time.Millisecond, mockApiClient, &dockerInfo, "ID")
-	pollStats(&monitor.ParamList{monitor.Cpu, monitor.Mem}, 20*time.Millisecond, mockApiClient, &dockerInfo, "ID")
+	pollStats(&param.ParamList{param.Cpu, param.Mem}, 20*time.Millisecond, mockApiClient, &dockerInfo, "ID")
 }
 
 func TestUsagePrintout(t *testing.T) {
 	assertT := assert.New(t)
 
-	stream, ch := monitor.CreateStream()
+	stream, ch := param.CreateStream()
 
 	usage(stream)
 
-	output := monitor.ReadStream(stream, ch)
+	output := param.ReadStream(stream, ch)
 	assertT.True(strings.HasPrefix(output, "Docker container performance statistics\nUsage: docker-stat -refresh=... -params=... containerId"))
 }

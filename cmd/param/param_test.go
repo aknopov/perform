@@ -1,4 +1,4 @@
-package monitor
+package param
 
 import (
 	"regexp"
@@ -80,7 +80,7 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name:       "No ID",
-			args:       []string{"test", "-params=", "CpuPerc, MemPerc"},
+			args:       []string{"test", "-params=", "Cpu, Mem"},
 			expName:    "",
 			expIntvl:   1.0,
 			expParms:   []ParamType{},

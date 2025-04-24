@@ -1,7 +1,5 @@
 all: false
-dir: './monitor/docker-stat'
-filename: mocks_test.go
-force-file-write: true
+force-file-write: false
 formatter: goimports
 log-level: info
 structname: '{{.Mock}}{{.InterfaceName}}'
@@ -12,5 +10,8 @@ template: testify
 template-schema: '{{.Template}}.schema.json'
 packages:
   github.com/docker/docker/client:
+    config:
+      dir: './cmd/docker-stat'
+      filename: mocks_test.go
     interfaces:
       ContainerAPIClient:

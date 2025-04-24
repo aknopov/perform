@@ -8,14 +8,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/aknopov/perform/monitor"
+	"github.com/aknopov/perform/cmd/param"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
 )
 
 func main() {
-	containerId, paramList, refreshSec, err := monitor.ParseParams(os.Args, func() { usage(os.Stderr) })
+	containerId, paramList, refreshSec, err := param.ParseParams(os.Args, func() { usage(os.Stderr) })
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
 		usage(os.Stderr)
@@ -28,11 +28,11 @@ func main() {
 	dockerInfo, err := apiClient.Info(context.Background())
 	assertNoErr(err, "Failed to get Docker info - is daemon running?")
 
-	monitor.PrintHeader(os.Stdout, paramList)
+	param.PrintHeader(os.Stdout, paramList)
 	pollStats(paramList, refreshPeriod, apiClient, &dockerInfo, containerId)
 }
 
-func pollStats(paramList *monitor.ParamList, refreshPeriod time.Duration, apiClient client.ContainerAPIClient, dockerInfo *system.Info, containerId string) {
+func pollStats(paramList *param.ParamList, refreshPeriod time.Duration, apiClient client.ContainerAPIClient, dockerInfo *system.Info, containerId string) {
 
 	values := make([]float64, len(*paramList))
 	ticker := time.NewTicker(refreshPeriod)
@@ -47,7 +47,7 @@ func pollStats(paramList *monitor.ParamList, refreshPeriod time.Duration, apiCli
 			values[i] = getValue(dockerInfo, stats, p)
 		}
 
-		monitor.PrintValues(os.Stdout, values)
+		param.PrintValues(os.Stdout, values)
 	}
 }
 
@@ -78,24 +78,24 @@ func isContainerAlive(stats *container.StatsResponse) bool {
 	return stats.CPUStats.OnlineCPUs != 0
 }
 
-func getValue(dockerInfo *system.Info, stats *container.StatsResponse, param monitor.ParamType) float64 {
-	switch param {
-	case monitor.CPUs:
+func getValue(dockerInfo *system.Info, stats *container.StatsResponse, p param.ParamType) float64 {
+	switch p {
+	case param.CPUs:
 		return float64(stats.CPUStats.OnlineCPUs)
-	case monitor.Mem:
+	case param.Mem:
 		return float64(stats.MemoryStats.Usage / 1024)
-	case monitor.PIDs:
+	case param.PIDs:
 		return float64(stats.PidsStats.Current)
-	case monitor.Rx:
+	case param.Rx:
 		rx, _ := calcNetIO(stats)
 		return rx
-	case monitor.Tx:
+	case param.Tx:
 		_, tx := calcNetIO(stats)
 		return tx
-	case monitor.Cpu:
+	case param.Cpu:
 		return float64((stats.CPUStats.CPUUsage.UsageInUsermode + stats.CPUStats.CPUUsage.UsageInKernelmode) / uint64(time.Millisecond))
 	default:
-		panic("Parameter value " + strconv.Itoa(int(param)) + " not recognised")
+		panic("Parameter value " + strconv.Itoa(int(p)) + " not recognised")
 	}
 }
 
