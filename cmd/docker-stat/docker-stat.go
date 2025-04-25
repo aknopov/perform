@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/aknopov/perform/cmd/param"
@@ -17,8 +16,10 @@ import (
 func main() {
 	containerId, paramList, refreshSec, err := param.ParseParams(os.Args, func() { usage(os.Stderr) })
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
-		usage(os.Stderr)
+		if err.Error() != "flag: help requested" {
+			fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
+			usage(os.Stderr)
+		}
 		os.Exit(1)
 	}
 	refreshPeriod := time.Duration(int64(refreshSec * float64(time.Second)))
@@ -62,7 +63,7 @@ func getContainerInfo(apiClient client.ContainerAPIClient, containerId string) (
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var stats container.StatsResponse
 	err = json.NewDecoder(resp.Body).Decode(&stats)
@@ -95,7 +96,7 @@ func getValue(dockerInfo *system.Info, stats *container.StatsResponse, p param.P
 	case param.Cpu:
 		return float64((stats.CPUStats.CPUUsage.UsageInUsermode + stats.CPUStats.CPUUsage.UsageInKernelmode) / uint64(time.Millisecond))
 	default:
-		panic("Parameter value " + strconv.Itoa(int(p)) + " not recognised")
+		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
 }
 
@@ -146,6 +147,7 @@ func calcNetIO(stats *container.StatsResponse) (float64, float64) {
 	return float64(rxDelta) / deltaSec / 1024, float64(txDelta) / deltaSec / 1024
 }
 
+//nolint:errcheck
 func usage(sink *os.File) {
 	fmt.Fprintln(sink, `Docker container performance statistics
 Usage: docker-stat -refresh=... -params=... containerId

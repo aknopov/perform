@@ -85,11 +85,13 @@ func ParseParams(args []string, usage func()) (string, *ParamList, float64, erro
 	if len(otherArgs) < 1 {
 		return "", nil, 0, errors.New("container/process ID is missing")
 	}
+	
 
 	return otherArgs[0], &paramList, refreshSec, nil
 }
 
 // Prints headers for monitored parameters
+//nolint:errcheck
 func PrintHeader(sink *os.File, paramList *ParamList) {
 	fmt.Fprint(sink, "Time                       ")
 	for _, p := range *paramList {
@@ -99,6 +101,7 @@ func PrintHeader(sink *os.File, paramList *ParamList) {
 }
 
 // Prints values of monitored parameters
+//nolint:errcheck
 func PrintValues(sink *os.File, values []float64) {
 	fmt.Fprint(sink, time.Now().Format("2006-01-02 15:04:05.000  "))
 	for _, v := range values {

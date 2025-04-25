@@ -98,7 +98,7 @@ func TestPrintHeader(t *testing.T) {
 
 	stream, ch := param.CreateStream()
 
-	var paramList param.ParamList = param.ParamList{param.CPUs, param.Tx}
+	var paramList = param.ParamList{param.CPUs, param.Tx}
 	param.PrintHeader(stream, &paramList)
 
 	output := param.ReadStream(stream, ch)

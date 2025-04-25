@@ -1,5 +1,5 @@
 all: false
-force-file-write: false
+force-file-write: true
 formatter: goimports
 log-level: info
 structname: '{{.Mock}}{{.InterfaceName}}'
@@ -15,3 +15,17 @@ packages:
       filename: mocks_test.go
     interfaces:
       ContainerAPIClient:
+  github.com/mitchellh/go-ps:
+    config:
+      dir: './cmd/proc-stat'
+      filename: ps-mocks_test.go
+      structname: '{{.Mock}}Ps{{.InterfaceName}}'
+    interfaces:
+      Process:
+  github.com/aknopov/perform/cmd/param:
+    config:
+      dir: './cmd/proc-stat'
+      filename: q-mocks_test.go
+      structname: '{{.Mock}}Q{{.InterfaceName}}'
+    interfaces:
+      IQProcess:

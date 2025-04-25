@@ -18,7 +18,7 @@ func TestParamTypeCoverage(t *testing.T) {
 	}
 
 	namedParams := make([]ParamType, 0)
-	for p, _ := range nameMap {
+	for p := range nameMap {
 		namedParams = append(namedParams, p)
 	}
 	assertT.ElementsMatch(allParams, namedParams)
@@ -58,13 +58,13 @@ func TestParseParams(t *testing.T) {
 		name       string
 		args       []string
 		expName    string
-		expIntvl   float32
+		expIntvl   float64
 		expParms   ParamList
 		shouldFail bool
 	}{
 		{
 			name:       "Normal",
-			args:       []string{"test", "-params=", "Cpu, Mem", "ID"},
+			args:       []string{"test", "-params=Cpu, Mem", "ID"},
 			expName:    "ID",
 			expIntvl:   1.0,
 			expParms:   []ParamType{Cpu, Mem},
@@ -72,33 +72,35 @@ func TestParseParams(t *testing.T) {
 		},
 		{
 			name:       "Normal",
-			args:       []string{"test", "-params=", "Cpu, Mem", "-refresh=", "10", "ID"},
+			args:       []string{"test", "-params=Cpu, Mem", "-refresh=10", "ID"},
 			expName:    "ID",
-			expIntvl:   1.0,
+			expIntvl:   10.0,
 			expParms:   []ParamType{Cpu, Mem},
 			shouldFail: false,
 		},
 		{
 			name:       "No ID",
-			args:       []string{"test", "-params=", "Cpu, Mem"},
-			expName:    "",
-			expIntvl:   1.0,
-			expParms:   []ParamType{},
+			args:       []string{"test", "-params=Cpu, Mem"},
+			shouldFail: true,
+		},
+		{
+			name:       "Wrong args",
+			args:       []string{"test", "-foo"},
 			shouldFail: true,
 		},
 	}
 
 	for _, tc := range testCases {
-		name, params, intvl, err := ParseParams(tc.args, func(){})
+		name, params, intvl, err := ParseParams(tc.args, func() {})
 
-		if !tc.shouldFail {
-			assertT.NoError(err, "In test", tc.name)
-			return
+		if tc.shouldFail {
+			assertT.Error(err, "In test", tc.name)
+			continue
 		}
 
 		assertT.Equal(tc.expName, name, "In test", tc.name)
 		assertT.Equal(tc.expIntvl, intvl, "In test", tc.name)
-		assertT.ElementsMatch(tc.expParms, params, "In test", tc.name)
+		assertT.ElementsMatch(tc.expParms, *params, "In test", tc.name)
 	}
 }
 
@@ -107,7 +109,7 @@ func TestPrintHeader(t *testing.T) {
 
 	stream, ch := CreateStream()
 
-	var paramList ParamList = ParamList{CPUs, Tx}
+	paramList := ParamList{CPUs, Tx}
 	PrintHeader(stream, &paramList)
 
 	output := ReadStream(stream, ch)

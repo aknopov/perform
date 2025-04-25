@@ -22,7 +22,7 @@ func CreateStream() (*os.File, chan string) {
 
 // Reads from memory-based file for testing logging
 func ReadStream(outStream *os.File, outC chan string) string {
-	outStream.Close()
+	outStream.Close() //nolint:errcheck
 
 	output := <-outC
 	return output

@@ -1,0 +1,182 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	pm "github.com/aknopov/perform/cmd/param"
+	ps "github.com/mitchellh/go-ps"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/net"
+	"github.com/shirou/gopsutil/process"
+	"github.com/stretchr/testify/assert"
+)
+
+var (
+	testTimes  = cpu.TimesStat{User: 1234, System: 555}
+	testMemory = process.MemoryInfoStat{RSS: 1024 * 1024}
+	testNetIO  = []net.IOCountersStat{{BytesSent: 22222, BytesRecv: 33333}}
+	errTest    = fmt.Errorf("test error")
+)
+
+func TestGetProcPid(t *testing.T) {
+	assertT := assert.New(t)
+
+	mockProcess := NewMockPsProcess(t)
+	mockProcess.EXPECT().Pid().Return(123)
+	mockProcess.EXPECT().Executable().Return("prog")
+
+	testGetProcessList := func() ([]ps.Process, error) {
+		return []ps.Process{mockProcess}, nil
+	}
+	defer replaceFun0(&getProcessList, testGetProcessList)()
+
+	pid, err := getProcPid("prog")
+	assertT.Nil(err)
+	assertT.Equal(123, pid)
+	pid, err = getProcPid("123")
+	assertT.Nil(err)
+	assertT.Equal(123, pid)
+
+	_, err = getProcPid("boo")
+	assertT.Error(err)
+	_, err = getProcPid("777")
+	assertT.Error(err)
+}
+
+func TestIsProcessAlive(t *testing.T) {
+	assertT := assert.New(t)
+
+	mockProcess := NewMockPsProcess(t)
+	mockProcess.EXPECT().Pid().Return(123)
+
+	testFindProcess := func(pid int) (ps.Process, error) {
+		return mockProcess, nil
+	}
+	defer replaceFun1(&findProcess, testFindProcess)()
+
+	assertT.True(isProcessAlive(123))
+}
+
+func TestIsProcessAliveFail(t *testing.T) {
+	assertT := assert.New(t)
+
+	testFindProcess := func(pid int) (ps.Process, error) {
+		return nil, errTest
+	}
+	defer replaceFun1(&findProcess, testFindProcess)()
+
+	assertT.False(isProcessAlive(123))
+
+	findProcess = func(pid int) (ps.Process, error) {
+		return nil, nil
+	}
+
+	assertT.False(isProcessAlive(123))
+}
+
+func TestCheckIfNetAsked(t *testing.T) {
+	assertT := assert.New(t)
+
+	assertT.False(checkIfNetAsked(&pm.ParamList{}))
+	assertT.False(checkIfNetAsked(&pm.ParamList{pm.CPUs, pm.PIDs}))
+	assertT.True(checkIfNetAsked(&pm.ParamList{pm.CPUs, pm.PIDs, pm.Tx}))
+	assertT.True(checkIfNetAsked(&pm.ParamList{pm.CPUs, pm.PIDs, pm.Rx}))
+}
+
+func TestPollStats(t *testing.T) {
+	mockProcess := NewMockPsProcess(t)
+	mockProcess.EXPECT().Pid().Return(123)
+
+	qProc := NewMockQIQProcess(t)
+	qProc.EXPECT().GetPID().Return(123).Times(2)
+	qProc.EXPECT().Times().Return(&testTimes, nil).Once()
+
+	cnt := 0
+	testFindProcess := func(pid int) (ps.Process, error) {
+		cnt++
+		if cnt == 1 {
+			return mockProcess, nil
+		} else {
+			return nil, errTest
+		}
+	}
+	defer replaceFun1(&findProcess, testFindProcess)()
+
+	paramList := pm.ParamList{pm.Cpu}
+
+	pollStats(qProc, &paramList, 100*time.Millisecond)
+}
+
+func TestPollStatsWithNet(t *testing.T) {
+	mockProcess := NewMockPsProcess(t)
+	mockProcess.EXPECT().Pid().Return(123)
+
+	qProc := NewMockQIQProcess(t)
+	qProc.EXPECT().GetPID().Return(123).Times(2)
+	qProc.EXPECT().Times().Return(&testTimes, nil).Once()
+	qProc.EXPECT().NetIOCounters(false).Return(testNetIO, nil).Once()
+
+	cnt := 0
+	testFindProcess := func(pid int) (ps.Process, error) {
+		cnt++
+		if cnt == 1 {
+			return mockProcess, nil
+		} else {
+			return nil, errTest
+		}
+	}
+	defer replaceFun1(&findProcess, testFindProcess)()
+
+	paramList := pm.ParamList{pm.Cpu, pm.Tx}
+
+	pollStats(qProc, &paramList, 100*time.Millisecond)
+}
+
+func TestGetValue(t *testing.T) {
+	assertT := assert.New(t)
+
+	qProc := NewMockQIQProcess(t)
+	qProc.EXPECT().Times().Return(&testTimes, nil)
+	qProc.EXPECT().MemoryInfo().Return(&testMemory, nil)
+	qProc.EXPECT().NumThreads().Return(13, nil)
+
+	newGetNumCPU := func() int { return 256 }
+	defer replaceFunPlain(&getNumCPU, newGetNumCPU)()
+
+	assertT.EqualValues(1234+555, getValue(qProc, testNetIO, pm.Cpu))
+	assertT.EqualValues(1024, getValue(qProc, testNetIO, pm.Mem))
+	assertT.EqualValues(256, getValue(qProc, testNetIO, pm.CPUs))
+	assertT.EqualValues(13, getValue(qProc, testNetIO, pm.PIDs))
+	assertT.EqualValues(22222, getValue(qProc, testNetIO, pm.Tx))
+	assertT.EqualValues(33333, getValue(qProc, testNetIO, pm.Rx))
+	assertT.Panics(func() { getValue(qProc, testNetIO, pm.Rx+100) })
+}
+
+func TestGetValueRecovery(t *testing.T) {
+	assertT := assert.New(t)
+
+	qProc := NewMockQIQProcess(t)
+	qProc.EXPECT().Times().Return(nil, errTest).Once()
+	qProc.EXPECT().MemoryInfo().Return(nil, errTest).Once()
+	qProc.EXPECT().NumThreads().Return(0, errTest)
+
+	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Cpu))
+	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Mem))
+	assertT.EqualValues(-1, getValue(qProc, testNetIO, pm.PIDs))
+	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Tx))
+	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Rx))
+}
+
+func TestUsage(t *testing.T) {
+	assertT := assert.New(t)
+
+	stream, ch := pm.CreateStream()
+
+	usage(stream)
+
+	output := pm.ReadStream(stream, ch)
+	assertT.True(strings.HasPrefix(output, "Application performance statistics\nUsage: proc-stat -refresh=... -params=... proc"))
+}

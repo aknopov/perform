@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/aknopov/perform"
-	"github.com/aknopov/perform/cmd/param"
+	pm "github.com/aknopov/perform/cmd/param"
 	ps "github.com/mitchellh/go-ps"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/net"
@@ -22,27 +22,33 @@ var (
 	NO_NET_IO   = []net.IOCountersStat{}
 )
 
+var (
+	getProcessList = ps.Processes
+	findProcess    = ps.FindProcess
+	getNumCPU      = runtime.NumCPU
+)
+
 func main() {
-	cmd, paramList, refreshSec, err := param.ParseParams(os.Args, func() { usage(os.Stderr) })
+	procId, paramList, refreshSec, err := pm.ParseParams(os.Args, func() { usage(os.Stderr) })
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
-		usage(os.Stderr)
+		if err.Error() != "flag: help requested" {
+			fmt.Fprintf(os.Stderr, "Error: %s\n\n", err)
+			usage(os.Stderr)
+		}
 		os.Exit(1)
 	}
 	refreshPeriod := time.Duration(int64(refreshSec * float64(time.Second)))
 
 	// hostInfo := perform.AssertNoErr(host.Info())
 
-	pid := perform.AssertNoErr(getProcPid(cmd))
+	pid := perform.AssertNoErr(getProcPid(procId))
 	p, _ := process.NewProcess(int32(pid))
 
-	param.PrintHeader(os.Stdout, paramList)
-	pollStats(p, paramList, refreshPeriod)
+	pm.PrintHeader(os.Stdout, paramList)
+	pollStats(pm.NewQProcess(p), paramList, refreshPeriod)
 }
 
-func pollStats(proc *process.Process, paramList *param.ParamList, refreshPeriod time.Duration) {
-
-	// _ = perform.AssertNoErr(p.Percent(0))
+func pollStats(proc pm.IQProcess, paramList *pm.ParamList, refreshPeriod time.Duration) {
 
 	getProcNetFn := func() ([]net.IOCountersStat, error) { return proc.NetIOCounters(false) }
 	queryNet := checkIfNetAsked(paramList)
@@ -52,7 +58,7 @@ func pollStats(proc *process.Process, paramList *param.ParamList, refreshPeriod 
 	values := make([]float64, len(*paramList))
 
 	for range ticker.C {
-		if !isProcessAlive(int(proc.Pid)) {
+		if !isProcessAlive(int(proc.GetPID())) {
 			break
 		}
 
@@ -64,58 +70,58 @@ func pollStats(proc *process.Process, paramList *param.ParamList, refreshPeriod 
 			values[i] = getValue(proc, netInfo, p)
 		}
 
-		param.PrintValues(os.Stdout, values)
+		pm.PrintValues(os.Stdout, values)
 	}
 }
 
-func checkIfNetAsked(paramList *param.ParamList) bool {
+func checkIfNetAsked(paramList *pm.ParamList) bool {
 	for _, p := range *paramList {
-		if p == param.Tx || p == param.Rx {
+		if p == pm.Tx || p == pm.Rx {
 			return true
 		}
 	}
 	return false
 }
 
-func getValue(proc *process.Process, netInfo []net.IOCountersStat, p param.ParamType) float64 {
+func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
 
 	switch p {
-	case param.Cpu:
+	case pm.Cpu:
 		ts := perform.AssumeOnErr(proc.Times, NO_TIMESTAT)
 		return ts.User + ts.System // Also: Total()
-	case param.Mem:
+	case pm.Mem:
 		memInfo := perform.AssumeOnErr(proc.MemoryInfo, NO_MEMSTAT)
 		return float64(memInfo.RSS) / 1024
-	case param.CPUs:
-		return float64(runtime.NumCPU())
-	case param.PIDs:
+	case pm.CPUs:
+		return float64(getNumCPU())
+	case pm.PIDs:
 		return float64(perform.AssumeOnErr(proc.NumThreads, -1))
-	case param.Tx:
+	case pm.Tx:
 		var txBytes uint64
 		for _, ni := range netInfo {
 			txBytes += ni.BytesSent
 		}
 		return float64(txBytes)
-	case param.Rx:
+	case pm.Rx:
 		var rxBytes uint64
 		for _, ni := range netInfo {
 			rxBytes += ni.BytesRecv
 		}
 		return float64(rxBytes)
 	default:
-		panic(fmt.Errorf("Unknown parameter type: %v", p))
+		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
 }
 
 func getProcPid(cmd string) (int, error) {
-	procList := perform.AssertNoErr(ps.Processes())
+	procList := perform.AssertNoErr(getProcessList())
 
 	pid, err := strconv.Atoi(cmd)
 
 	for _, p := range procList {
 		if err == nil && pid == p.Pid() {
 			return pid, nil
-		} else if strings.Contains(p.Executable(), cmd) && isProcessAlive(p.Pid()) {
+		} else if strings.Contains(p.Executable(), cmd) {
 			return p.Pid(), nil
 		}
 	}
@@ -124,10 +130,11 @@ func getProcPid(cmd string) (int, error) {
 }
 
 func isProcessAlive(pid int) bool {
-	proc, err := ps.FindProcess(pid)
-	return err == nil && proc.Pid() == pid
+	proc, err := findProcess(pid)
+	return err == nil && proc != nil && proc.Pid() == pid
 }
 
+//nolint:errcheck
 func usage(sink *os.File) {
 	fmt.Fprintln(sink, `Application performance statistics
 Usage: proc-stat -refresh=... -params=... proc
