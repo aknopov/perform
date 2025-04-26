@@ -50,6 +50,15 @@ var (
 		Rx:   "Rx (KB)",
 		Tx:   "Tx (KB)",
 	}
+
+	formatMap = map[ParamType]string{
+		Cpu:  " %*.2f",
+		Mem:  " %*.0f",
+		PIDs: " %*.0f",
+		CPUs: " %*.0f",
+		Rx:   " %*.2f",
+		Tx:   " %*.2f",
+	}
 )
 
 const (
@@ -66,7 +75,7 @@ func parseParamList(flagValues string, paramList *ParamList) error {
 }
 
 // Parses commandline; returns program name,  monitored parameters list, monitoring frequency
-func ParseParams(args []string, usage func()) (string, *ParamList, float64, error) {
+func ParseParams(args []string, usage func()) (string, ParamList, float64, error) {
 	progName := filepath.Base(args[0])
 	flagSet := flag.NewFlagSet(progName, flag.ContinueOnError)
 	flagSet.Usage = usage
@@ -86,15 +95,15 @@ func ParseParams(args []string, usage func()) (string, *ParamList, float64, erro
 		return "", nil, 0, errors.New("container/process ID is missing")
 	}
 
-	return otherArgs[0], &paramList, refreshSec, nil
+	return otherArgs[0], paramList, refreshSec, nil
 }
 
 // Prints headers for monitored parameters
 //
 //nolint:errcheck
-func PrintHeader(sink *os.File, paramList *ParamList) {
+func PrintHeader(sink *os.File, paramList ParamList) {
 	fmt.Fprint(sink, "Time                   ")
-	for _, p := range *paramList {
+	for _, p := range paramList {
 		fmt.Fprintf(sink, " %*s", colWidth, nameMap[p])
 	}
 	fmt.Fprintln(sink)
@@ -103,10 +112,11 @@ func PrintHeader(sink *os.File, paramList *ParamList) {
 // Prints values of monitored parameters
 //
 //nolint:errcheck
-func PrintValues(sink *os.File, values []float64) {
+func PrintValues(sink *os.File, paramList ParamList, values []float64) {
 	fmt.Fprint(sink, time.Now().Format("2006-01-02 15:04:05.000"))
-	for _, v := range values {
-		fmt.Fprintf(sink, " %*.2f", colWidth, v)
+	for i, v := range values {
+		f := formatMap[paramList[i]]
+		fmt.Fprintf(sink, f, colWidth, v)
 	}
 	fmt.Fprintln(sink)
 }

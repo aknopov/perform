@@ -48,14 +48,14 @@ func main() {
 	pollStats(pm.NewQProcess(p), paramList, refreshPeriod)
 }
 
-func pollStats(proc pm.IQProcess, paramList *pm.ParamList, refreshPeriod time.Duration) {
+func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Duration) {
 
 	getProcNetFn := func() ([]net.IOCountersStat, error) { return proc.NetIOCounters(false) }
 	queryNet := checkIfNetAsked(paramList)
 	netInfo := NO_NET_IO
 
 	ticker := time.NewTicker(refreshPeriod)
-	values := make([]float64, len(*paramList))
+	values := make([]float64, len(paramList))
 
 	for range ticker.C {
 		if !isProcessAlive(int(proc.GetPID())) {
@@ -66,16 +66,16 @@ func pollStats(proc pm.IQProcess, paramList *pm.ParamList, refreshPeriod time.Du
 			netInfo = perform.AssumeOnErr(getProcNetFn, NO_NET_IO)
 		}
 
-		for i, p := range *paramList {
+		for i, p := range paramList {
 			values[i] = getValue(proc, netInfo, p)
 		}
 
-		pm.PrintValues(os.Stdout, values)
+		pm.PrintValues(os.Stdout, paramList, values)
 	}
 }
 
-func checkIfNetAsked(paramList *pm.ParamList) bool {
-	for _, p := range *paramList {
+func checkIfNetAsked(paramList pm.ParamList) bool {
+	for _, p := range paramList {
 		if p == pm.Tx || p == pm.Rx {
 			return true
 		}

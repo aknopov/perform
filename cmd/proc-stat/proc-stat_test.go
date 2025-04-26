@@ -80,10 +80,10 @@ func TestIsProcessAliveFail(t *testing.T) {
 func TestCheckIfNetAsked(t *testing.T) {
 	assertT := assert.New(t)
 
-	assertT.False(checkIfNetAsked(&pm.ParamList{}))
-	assertT.False(checkIfNetAsked(&pm.ParamList{pm.CPUs, pm.PIDs}))
-	assertT.True(checkIfNetAsked(&pm.ParamList{pm.CPUs, pm.PIDs, pm.Tx}))
-	assertT.True(checkIfNetAsked(&pm.ParamList{pm.CPUs, pm.PIDs, pm.Rx}))
+	assertT.False(checkIfNetAsked(pm.ParamList{}))
+	assertT.False(checkIfNetAsked(pm.ParamList{pm.CPUs, pm.PIDs}))
+	assertT.True(checkIfNetAsked(pm.ParamList{pm.CPUs, pm.PIDs, pm.Tx}))
+	assertT.True(checkIfNetAsked(pm.ParamList{pm.CPUs, pm.PIDs, pm.Rx}))
 }
 
 func TestNetIO(t *testing.T) {
@@ -123,7 +123,7 @@ func TestPollStats(t *testing.T) {
 
 	paramList := pm.ParamList{pm.Cpu}
 
-	pollStats(qProc, &paramList, 100*time.Millisecond)
+	pollStats(qProc, paramList, 100*time.Millisecond)
 }
 
 func TestPollStatsWithNet(t *testing.T) {
@@ -150,7 +150,7 @@ func TestPollStatsWithNet(t *testing.T) {
 
 	paramList := pm.ParamList{pm.Cpu, pm.Tx}
 
-	pollStats(qProc, &paramList, 100*time.Millisecond)
+	pollStats(qProc, paramList, 100*time.Millisecond)
 }
 
 func TestGetValue(t *testing.T) {

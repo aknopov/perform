@@ -185,7 +185,7 @@ func TestPollStats(t *testing.T) {
 	mockApiClient.EXPECT().ContainerStatsOneShot(context.Background(), "ID").Return(resp2, nil).Once()
 	mockApiClient.EXPECT().ContainerStatsOneShot(context.Background(), "ID").Return(resp3, nil).Once()
 
-	pollStats(&param.ParamList{param.Cpu, param.Mem}, 20*time.Millisecond, mockApiClient, &dockerInfo, "ID")
+	pollStats(param.ParamList{param.Cpu, param.Mem}, 20*time.Millisecond, mockApiClient, &dockerInfo, "ID")
 }
 
 func TestUsagePrintout(t *testing.T) {

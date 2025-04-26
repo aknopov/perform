@@ -33,9 +33,9 @@ func main() {
 	pollStats(paramList, refreshPeriod, apiClient, &dockerInfo, containerId)
 }
 
-func pollStats(paramList *param.ParamList, refreshPeriod time.Duration, apiClient client.ContainerAPIClient, dockerInfo *system.Info, containerId string) {
+func pollStats(paramList param.ParamList, refreshPeriod time.Duration, apiClient client.ContainerAPIClient, dockerInfo *system.Info, containerId string) {
 
-	values := make([]float64, len(*paramList))
+	values := make([]float64, len(paramList))
 	ticker := time.NewTicker(refreshPeriod)
 	for range ticker.C {
 		stats, err := getContainerInfo(apiClient, containerId)
@@ -44,11 +44,11 @@ func pollStats(paramList *param.ParamList, refreshPeriod time.Duration, apiClien
 			break
 		}
 
-		for i, p := range *paramList {
+		for i, p := range paramList {
 			values[i] = getValue(dockerInfo, stats, p)
 		}
 
-		param.PrintValues(os.Stdout, values)
+		param.PrintValues(os.Stdout, paramList, values)
 	}
 }
 

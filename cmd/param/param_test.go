@@ -100,7 +100,7 @@ func TestParseParams(t *testing.T) {
 
 		assertT.Equal(tc.expName, name, "In test", tc.name)
 		assertT.Equal(tc.expIntvl, intvl, "In test", tc.name)
-		assertT.ElementsMatch(tc.expParms, *params, "In test", tc.name)
+		assertT.ElementsMatch(tc.expParms, params, "In test", tc.name)
 	}
 }
 
@@ -110,7 +110,7 @@ func TestPrintHeader(t *testing.T) {
 	stream, ch := CreateStream()
 
 	paramList := ParamList{CPUs, Tx}
-	PrintHeader(stream, &paramList)
+	PrintHeader(stream, paramList)
 
 	output := ReadStream(stream, ch)
 	assertT.Equal("Time                           CPUs     Tx (KB)\n", output)
@@ -122,10 +122,11 @@ func TestPrintValues(t *testing.T) {
 
 	stream, ch := CreateStream()
 
-	PrintValues(stream, []float64{1.0, 13.0})
+	paramList := ParamList{CPUs, Tx}
+	PrintValues(stream, paramList, []float64{1.0, 13.0})
 
 	output := ReadStream(stream, ch)
 	tsRex := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} .*`)
 	assertT.True(tsRex.MatchString(output))
-	assertT.True(strings.HasSuffix(output, "       1.00       13.00\n"))
+	assertT.True(strings.HasSuffix(output, "          1       13.00\n"))
 }
