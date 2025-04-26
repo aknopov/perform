@@ -132,19 +132,14 @@ func calcNetIO(stats *container.StatsResponse) (float64, float64) {
 		rxTotal += ns.RxBytes
 		txTotal += ns.TxBytes
 	}
-	rxDelta := rxTotal - prevRx
-	txDelta := txTotal - prevTx
-	timeDelta := stats.Read.Sub(prevTime).Nanoseconds()
 
-	defer func() { prevTime = stats.Read }()
-	prevRx = rxTotal
-	prevTx = txTotal
-	if prevTime.IsZero() || timeDelta == 0 {
-		return 0.0, 0.0
+	if prevTime.IsZero() {
+		prevRx = rxTotal
+		prevTx = txTotal
+		prevTime = time.Now()
 	}
 
-	deltaSec := float64(timeDelta) / float64(time.Second)
-	return float64(rxDelta) / deltaSec / 1024, float64(txDelta) / deltaSec / 1024
+	return float64(rxTotal-prevRx) / 1024, float64(txTotal-prevTx) / 1024
 }
 
 //nolint:errcheck
@@ -158,6 +153,6 @@ Usage: docker-stat -refresh=... -params=... containerId
   Mem - container memory usage (KB)
   PIDs - number of container threads
   CPUs - number of processors available to the container
-  Rx - total network read rate (KBs)
-  Tx - total network write rate (KBs)`)
+  Rx - total network read rate (KB)
+  Tx - total network write rate (KB)`)
 }

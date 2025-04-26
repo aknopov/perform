@@ -83,6 +83,11 @@ func checkIfNetAsked(paramList *pm.ParamList) bool {
 	return false
 }
 
+var (
+	prevRx uint64 = 0
+	prevTx uint64 = 0
+)
+
 func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
 
 	switch p {
@@ -101,13 +106,19 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 		for _, ni := range netInfo {
 			txBytes += ni.BytesSent
 		}
-		return float64(txBytes)
+		if prevTx == 0 {
+			prevTx = txBytes
+		}
+		return float64(txBytes-prevTx) / 1024
 	case pm.Rx:
 		var rxBytes uint64
 		for _, ni := range netInfo {
 			rxBytes += ni.BytesRecv
 		}
-		return float64(rxBytes)
+		if prevRx == 0 {
+			prevRx = rxBytes
+		}
+		return float64(rxBytes-prevRx) / 1024
 	default:
 		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
@@ -145,6 +156,6 @@ proc - process ID or command line
   Mem - process memory usage (KB)
   PIDs - number of process threads
   CPUs - number of host processors available to the process
-  Rx - total network read rate (KBs)
-  Tx - total network write rate (KBs)`)
+  Rx - total network read rate (KB)
+  Tx - total network write rate (KB)`)
 }

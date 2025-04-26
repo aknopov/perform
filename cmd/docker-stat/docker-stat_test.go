@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -93,34 +92,10 @@ func TestIsContainerAlive(t *testing.T) {
 	assertT.False(isContainerAlive(&stats))
 }
 
-func TestPrintHeader(t *testing.T) {
-	assertT := assert.New(t)
-
-	stream, ch := param.CreateStream()
-
-	var paramList = param.ParamList{param.CPUs, param.Tx}
-	param.PrintHeader(stream, &paramList)
-
-	output := param.ReadStream(stream, ch)
-	assertT.Equal("Time                              CPUs    Tx MBps\n", output)
-
-}
-
-func TestPrintValues(t *testing.T) {
-	assertT := assert.New(t)
-
-	stream, ch := param.CreateStream()
-
-	param.PrintValues(stream, []float64{1.0, 13.0})
-
-	output := param.ReadStream(stream, ch)
-	tsRex := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} .*`)
-	assertT.True(tsRex.MatchString(output))
-	assertT.True(strings.HasSuffix(output, "         1.00       13.00\n"))
-}
-
 func TestCalcNetIO(t *testing.T) {
 	assertT := assert.New(t)
+
+	prevTime = time.Time{}
 
 	// The first call yeilds zeroes
 	rxRate, txRate := calcNetIO(&stats1)
@@ -128,8 +103,8 @@ func TestCalcNetIO(t *testing.T) {
 	assertT.Zero(txRate)
 
 	rxRate, txRate = calcNetIO(&stats2)
-	assertT.Equal(0.02, rxRate)
-	assertT.Equal(0.1, txRate)
+	assertT.EqualValues(2, rxRate)
+	assertT.EqualValues(10, txRate)
 }
 
 func TestCalcCpu(t *testing.T) {
@@ -148,18 +123,16 @@ func TestGetValue(t *testing.T) {
 	prevUser = 0
 	prevKernel = 0
 	prevTime = time.Time{}
-	prevRx = 0
-	prevTx = 0
 
-	assertT.Equal(5.0, getValue(&dockerInfo, &stats1, param.CPUs))
-	assertT.Equal(12.0, getValue(&dockerInfo, &stats1, param.PIDs))
-	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, param.Cpu))
-	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, param.Cpu))
-	assertT.Equal(21.0, getValue(&dockerInfo, &stats1, param.Cpu))
+	assertT.EqualValues(5, getValue(&dockerInfo, &stats1, param.CPUs))
+	assertT.EqualValues(12, getValue(&dockerInfo, &stats1, param.PIDs))
+	assertT.EqualValues(21, getValue(&dockerInfo, &stats1, param.Cpu))
+	assertT.EqualValues(21, getValue(&dockerInfo, &stats1, param.Cpu))
+	assertT.EqualValues(21, getValue(&dockerInfo, &stats1, param.Cpu))
 	getValue(&dockerInfo, &stats1, param.Rx)
-	assertT.Equal(0.02, getValue(&dockerInfo, &stats2, param.Rx))
+	assertT.EqualValues(2, getValue(&dockerInfo, &stats2, param.Rx))
 	getValue(&dockerInfo, &stats1, param.Tx)
-	assertT.Equal(0.1, getValue(&dockerInfo, &stats2, param.Tx))
+	assertT.EqualValues(10, getValue(&dockerInfo, &stats2, param.Tx))
 
 	assertT.Panics(func() { getValue(&dockerInfo, &stats1, param.Tx+100) })
 }

@@ -86,6 +86,22 @@ func TestCheckIfNetAsked(t *testing.T) {
 	assertT.True(checkIfNetAsked(&pm.ParamList{pm.CPUs, pm.PIDs, pm.Rx}))
 }
 
+func TestNetIO(t *testing.T) {
+	assertT := assert.New(t)
+
+	qProc := NewMockQIQProcess(t)
+	testNetIO2 := []net.IOCountersStat{{BytesSent: 22222 + 2*1024, BytesRecv: 33333 + 3*1024}}
+
+	prevRx = 0
+	prevTx = 0
+	// First values yield 0
+	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Tx))
+	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Rx))
+	// Following values are based on the first
+	assertT.EqualValues(2, getValue(qProc, testNetIO2, pm.Tx))
+	assertT.EqualValues(3, getValue(qProc, testNetIO2, pm.Rx))
+}
+
 func TestPollStats(t *testing.T) {
 	mockProcess := NewMockPsProcess(t)
 	mockProcess.EXPECT().Pid().Return(123)
@@ -111,6 +127,8 @@ func TestPollStats(t *testing.T) {
 }
 
 func TestPollStatsWithNet(t *testing.T) {
+	prevRx = 0
+	prevTx = 0
 	mockProcess := NewMockPsProcess(t)
 	mockProcess.EXPECT().Pid().Return(123)
 
@@ -138,6 +156,8 @@ func TestPollStatsWithNet(t *testing.T) {
 func TestGetValue(t *testing.T) {
 	assertT := assert.New(t)
 
+	prevRx = 0
+	prevTx = 0
 	qProc := NewMockQIQProcess(t)
 	qProc.EXPECT().Times().Return(&testTimes, nil)
 	qProc.EXPECT().MemoryInfo().Return(&testMemory, nil)
@@ -150,14 +170,17 @@ func TestGetValue(t *testing.T) {
 	assertT.EqualValues(1024, getValue(qProc, testNetIO, pm.Mem))
 	assertT.EqualValues(256, getValue(qProc, testNetIO, pm.CPUs))
 	assertT.EqualValues(13, getValue(qProc, testNetIO, pm.PIDs))
-	assertT.EqualValues(22222, getValue(qProc, testNetIO, pm.Tx))
-	assertT.EqualValues(33333, getValue(qProc, testNetIO, pm.Rx))
+	// measurement starts from 0 - see TestNetIO
+	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Tx))
+	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Rx))
 	assertT.Panics(func() { getValue(qProc, testNetIO, pm.Rx+100) })
 }
 
 func TestGetValueRecovery(t *testing.T) {
 	assertT := assert.New(t)
 
+	prevRx = 0
+	prevTx = 0
 	qProc := NewMockQIQProcess(t)
 	qProc.EXPECT().Times().Return(nil, errTest).Once()
 	qProc.EXPECT().MemoryInfo().Return(nil, errTest).Once()

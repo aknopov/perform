@@ -113,7 +113,7 @@ func TestPrintHeader(t *testing.T) {
 	PrintHeader(stream, &paramList)
 
 	output := ReadStream(stream, ch)
-	assertT.Equal("Time                              CPUs    Tx MBps\n", output)
+	assertT.Equal("Time                           CPUs     Tx (KB)\n", output)
 
 }
 
@@ -127,5 +127,5 @@ func TestPrintValues(t *testing.T) {
 	output := ReadStream(stream, ch)
 	tsRex := regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} .*`)
 	assertT.True(tsRex.MatchString(output))
-	assertT.True(strings.HasSuffix(output, "         1.00       13.00\n"))
+	assertT.True(strings.HasSuffix(output, "       1.00       13.00\n"))
 }
