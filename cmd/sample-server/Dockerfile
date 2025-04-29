@@ -3,12 +3,9 @@ FROM golang:latest AS build-stage
 WORKDIR /app
 
 COPY *.go ./
-CD 
-
 
 RUN go mod init sample-server
-RUN go get .
-RUN go mod download
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o /server.prog
 
 # Deploy the application binary into a lean image

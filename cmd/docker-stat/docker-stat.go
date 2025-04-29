@@ -13,6 +13,10 @@ import (
 	"github.com/docker/docker/client"
 )
 
+var (
+	NO_STAT = &container.StatsResponse{}
+)
+
 func main() {
 	containerId, paramList, refreshSec, err := param.ParseParams(os.Args, func() { usage(os.Stderr) })
 	if err != nil {
@@ -24,10 +28,8 @@ func main() {
 	}
 	refreshPeriod := time.Duration(int64(refreshSec * float64(time.Second)))
 
-	apiClient, err := client.NewClientWithOpts(client.FromEnv, client.WithVersion("1.47"))
-	assertNoErr(err, "Docker API not available")
-	dockerInfo, err := apiClient.Info(context.Background())
-	assertNoErr(err, "Failed to get Docker info - is daemon running?")
+	apiClient := assertNoErr(client.NewClientWithOpts(client.FromEnv, client.WithVersion("1.47")))
+	dockerInfo := assertNoErr(apiClient.Info(context.Background()))
 
 	param.PrintHeader(os.Stdout, paramList)
 	pollStats(paramList, refreshPeriod, apiClient, &dockerInfo, containerId)
@@ -38,8 +40,7 @@ func pollStats(paramList param.ParamList, refreshPeriod time.Duration, apiClient
 	values := make([]float64, len(paramList))
 	ticker := time.NewTicker(refreshPeriod)
 	for range ticker.C {
-		stats, err := getContainerInfo(apiClient, containerId)
-		assertNoErr(err, "Fail to get container info")
+		stats := assertNoErr(getContainerInfo(apiClient, containerId))
 		if !isContainerAlive(stats) {
 			break
 		}
@@ -52,10 +53,12 @@ func pollStats(paramList param.ParamList, refreshPeriod time.Duration, apiClient
 	}
 }
 
-func assertNoErr(err error, message string) {
+func assertNoErr[T any](val T, err error) T {
 	if err != nil {
-		panic(fmt.Sprintf("%s:\n%s", message, err))
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
+	return val
 }
 
 func getContainerInfo(apiClient client.ContainerAPIClient, containerId string) (*container.StatsResponse, error) {
