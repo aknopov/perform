@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -33,17 +35,28 @@ func TestGetProcPid(t *testing.T) {
 	}
 	defer replaceFun0(&getProcessList, testGetProcessList)()
 
-	pid, err := getProcPid("prog")
-	assertT.Nil(err)
+	pid := getProcPid("prog")
 	assertT.Equal(123, pid)
-	pid, err = getProcPid("123")
-	assertT.Nil(err)
+	pid = getProcPid("123")
 	assertT.Equal(123, pid)
+}
 
-	_, err = getProcPid("boo")
-	assertT.Error(err)
-	_, err = getProcPid("777")
-	assertT.Error(err)
+func TestExitOnNoProcess(t *testing.T) {
+	assertT := assert.New(t)
+
+	// Testing exit code by starting external "go test""
+	testPid := os.Getenv("TEST_PID")
+	if testPid != "" {
+        getProcPid(testPid)
+        return
+    }
+
+	cmd := exec.Command(os.Args[0], "--test.run=TestExitOnNoProcess")
+	cmd.Env = append(os.Environ(), "TEST_PID=boo")
+    err := cmd.Run()
+	e := err.(*exec.ExitError)
+	assertT.Error(e)
+	assertT.Equal(1, e.ExitCode())
 }
 
 func TestIsProcessAlive(t *testing.T) {

@@ -39,6 +39,7 @@ func hashPassword4Gin(ctx *gin.Context) {
 
 	if request.Password == "quit" {
 		logger.Info().Msg("-- Stopping server...")
+		ctx.JSON(http.StatusOK, HashResponse{"done"})
 		stopChan <- perform.ND
 		return
 	}

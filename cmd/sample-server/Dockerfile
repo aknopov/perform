@@ -3,6 +3,8 @@ FROM golang:latest AS build-stage
 WORKDIR /app
 
 COPY *.go ./
+CD 
+
 
 RUN go mod init sample-server
 RUN go get .

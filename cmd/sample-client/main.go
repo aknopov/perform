@@ -18,7 +18,6 @@ import (
 const (
 	Port       = 8080
 	Host       = "localhost"
-	TotalTests = 500
 	WaitSleep  = 1 * time.Second
 )
 
@@ -39,7 +38,8 @@ var (
 func main() {
 
 	strength := flag.Int("s", 8, "encryption passes")
-	concur := flag.Int("c", 10, "concurrent requests")
+	concur := flag.Int("c", 10, "concurrent tasks")
+	totalTests := flag.Int("n", 500, "total tasks")
 	flag.Parse()
 
 	requestUrl := fmt.Sprintf("http://%s:%d", Host, Port)
@@ -50,7 +50,7 @@ func main() {
 	waitServer(requestUrl, 5*time.Minute)
 
 	startTime := time.Now()
-	stats := perform.RunTest([]perform.TestTask{task}, TotalTests, *concur)
+	stats := perform.RunTest([]perform.TestTask{task}, *totalTests, *concur)
 	elapsedTime := time.Since(startTime)
 
 	perform.AssertNoErr(perform.ND, sendOneRequest(requestUrl, []byte(quitReq)))

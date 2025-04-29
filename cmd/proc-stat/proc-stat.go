@@ -41,7 +41,7 @@ func main() {
 
 	// hostInfo := perform.AssertNoErr(host.Info())
 
-	pid := perform.AssertNoErr(getProcPid(procId))
+	pid := getProcPid(procId)
 	p, _ := process.NewProcess(int32(pid))
 
 	pm.PrintHeader(os.Stdout, paramList)
@@ -124,20 +124,23 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 	}
 }
 
-func getProcPid(cmd string) (int, error) {
+func getProcPid(cmd string) int {
 	procList := perform.AssertNoErr(getProcessList())
 
 	pid, err := strconv.Atoi(cmd)
 
 	for _, p := range procList {
 		if err == nil && pid == p.Pid() {
-			return pid, nil
+			return pid
 		} else if strings.Contains(p.Executable(), cmd) {
-			return p.Pid(), nil
+			return p.Pid()
 		}
 	}
 
-	return -1, fmt.Errorf("can't find process with '%s'", cmd)
+	fmt.Fprintf(os.Stderr, "Can't find process with PID or command line '%s'\n", cmd)
+	os.Exit(1)
+	
+	return -1
 }
 
 func isProcessAlive(pid int) bool {
