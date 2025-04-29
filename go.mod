@@ -1,6 +1,8 @@
 module github.com/aknopov/perform
 
-go 1.20
+go 1.23.0
+
+toolchain go1.23.3
 
 require (
 	github.com/docker/docker v28.1.1+incompatible
