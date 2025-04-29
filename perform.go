@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
-	. "sync"
+	"sync"
 	"time"
 )
 
@@ -24,23 +24,26 @@ type RunStats struct {
 type TestTask func() error
 
 type taskFixture struct {
-	sema      *chan struct{} // threads number throttle - shared
-	waitGroup *WaitGroup     // completion flag - shared
-	lock      Mutex          // `runtimes` guard
+	sema      *chan struct{}  // threads number throttle - shared
+	waitGroup *sync.WaitGroup // completion flag - shared
+	lock      sync.Mutex      // `runtimes` guard
 	task      TestTask
 	runtimes  []time.Duration
 	fails     int
 }
 
+// No data struct
+var ND = struct{}{}
+
 // Runs concurrently several tasks
 //
 //   - tasks - tasks to run
 //   - totalRuns - total number of tasks to run (> len(tasks))
-//   - parallel - number of concurrent runs (< totalRuns)
+//   - concurrent - number of concurrent tasks (< totalRuns)
 //   - return time statistics for each task
-func RunTest(tasks []TestTask, totalRuns int, parallel int) []RunStats {
-	waitGroup := new(WaitGroup)
-	sema := make(chan struct{}, parallel)
+func RunTest(tasks []TestTask, totalRuns int, concurrent int) []RunStats {
+	waitGroup := new(sync.WaitGroup)
+	sema := make(chan struct{}, concurrent)
 	fixtures := make([]*taskFixture, len(tasks))
 	for i, task := range tasks {
 		fixtures[i] = createFixture(task, &sema, waitGroup)
@@ -57,18 +60,18 @@ func RunTest(tasks []TestTask, totalRuns int, parallel int) []RunStats {
 	return calcStats(fixtures)
 }
 
-func createFixture(task TestTask, sema *chan struct{}, waitGroup *WaitGroup) *taskFixture {
+func createFixture(task TestTask, sema *chan struct{}, waitGroup *sync.WaitGroup) *taskFixture {
 	var fixture taskFixture
 	fixture.sema = sema
 	fixture.waitGroup = waitGroup
-	fixture.lock = Mutex{}
+	fixture.lock = sync.Mutex{}
 	fixture.task = task
 	fixture.runtimes = make([]time.Duration, 0)
 	return &fixture
 }
 
 func runOneTask(fixture *taskFixture) {
-	*fixture.sema <- struct{}{}
+	*fixture.sema <- ND
 	defer func() { <-*fixture.sema }()
 	defer fixture.waitGroup.Done()
 
@@ -121,4 +124,22 @@ func calcStats(fixtures []*taskFixture) []RunStats {
 func big2float(val *big.Float) float64 {
 	conv, _ := val.Float64()
 	return conv
+}
+
+// Aid fo unexpected errors without recovery
+func AssertNoErr[T any](val T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return val
+}
+
+// Recover from error - assume default value
+func AssumeOnErr[T any](f func() (T, error), defVal T) T {
+	val, err := f()
+	if err != nil {
+		print(err.Error())
+		return defVal
+	}
+	return val
 }
