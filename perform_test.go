@@ -20,6 +20,7 @@ const (
 var (
 	waitGroup = sync.WaitGroup{}
 	sema      = make(chan struct{}, 1)
+	errTest   = errors.New("test error")
 )
 
 func TestCreateFixture(t *testing.T) {
@@ -102,4 +103,18 @@ func TestRunTest(t *testing.T) {
 	oneStat := stats[0]
 	assertT.Equal(TotalTests, oneStat.Count)
 	assertT.GreaterOrEqual(oneStat.MinTime, SleepTime)
+}
+
+func TestAssertNoErr(t *testing.T) {
+	assertT := assert.New(t)
+
+	assertT.Equal("Hello", AssertNoErr("Hello", nil))
+	assertT.Panics(func() { AssertNoErr("Hello", errTest) })
+}
+
+func TestAssumeOnErr(t *testing.T) {
+	assertT := assert.New(t)
+
+	assertT.Equal(1, AssumeOnErr(func() (int, error) { return 1, nil }, -1))
+	assertT.Equal(-1, AssumeOnErr(func() (int, error) { return 0, errTest }, -1))
 }
