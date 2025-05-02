@@ -1,5 +1,7 @@
 package main
 
+import "flag"
+
 type HashRequest struct {
 	Password string `json:"password"`
 	Strength int    `json:"strength"`
@@ -14,5 +16,8 @@ const (
 )
 
 func main() {
-	startGin(Port)
+	minDelay := flag.Int("min", 0, "minimum response delay (msec)")
+	maxDelay := flag.Int("max", 0, "maximum response delay (msec)")
+
+	startGin(Port, *minDelay, *maxDelay)
 }

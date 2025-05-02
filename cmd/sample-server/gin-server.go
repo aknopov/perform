@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aknopov/fancylogger"
 	"github.com/aknopov/perform"
@@ -13,17 +15,15 @@ import (
 var (
 	logger   = fancylogger.NewLogger(os.Stderr, fancylogger.LiteFg)
 	stopChan = make(chan struct{}, 1)
-	// minSleep = 1000
-	// maxSleep = 10000
 )
 
-func startGin(port int) {
+func startGin(port, minDelay, maxDelay int) {
 	gin.SetMode(gin.ReleaseMode)
 
 	engine := gin.New()
 	engine.Use(gin.Recovery()) // no debug logging
 	perform.AssertNoErr(perform.ND, engine.SetTrustedProxies(nil))
-	engine.POST("/", hashPassword4Gin)
+	engine.POST("/", func(ctx *gin.Context) { hashPassword4Gin(ctx, minDelay, maxDelay) })
 
 	logger.Info().Msg("-- Starting server...")
 	go func() { perform.AssertNoErr(perform.ND, engine.Run(fmt.Sprintf(":%d", port))) }()
@@ -32,7 +32,7 @@ func startGin(port int) {
 	os.Exit(0)
 }
 
-func hashPassword4Gin(ctx *gin.Context) {
+func hashPassword4Gin(ctx *gin.Context, minDelay, maxDelay int) {
 	request := new(HashRequest)
 
 	perform.AssertNoErr(perform.ND, ctx.BindJSON(&request))
@@ -44,14 +44,12 @@ func hashPassword4Gin(ctx *gin.Context) {
 		return
 	}
 
-	// logger.Debug().
-	// 	Str("text", request.Password).
-	// 	Msg("Requested hash for")
-
 	hashCode := hashStr(request)
 
-	// Sleep 1-10 secs depending on the time since app start
-	// time.Sleep(time.Duration(minSleep+rand.Intn(maxSleep-minSleep)) * time.Millisecond)
+	// Sleep random number of milliseconds
+	if maxDelay > minDelay {
+		time.Sleep(time.Duration(minDelay+rand.Intn(maxDelay-minDelay)) * time.Millisecond)
+	}
 
 	ctx.JSON(http.StatusOK, HashResponse{hashCode})
 }

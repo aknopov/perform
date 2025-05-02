@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	Port       = 8080
-	Host       = "localhost"
-	WaitSleep  = 1 * time.Second
+	Port      = 8080
+	Host      = "localhost"
+	WaitSleep = 1 * time.Second
 )
 
 type HashRequest struct {
@@ -53,7 +53,8 @@ func main() {
 	stats := perform.RunTest([]perform.TestTask{task}, *totalTests, *concur)
 	elapsedTime := time.Since(startTime)
 
-	perform.AssertNoErr(perform.ND, sendOneRequest(requestUrl, []byte(quitReq)))
+	//nolint:errcheck
+	sendOneRequest(requestUrl, []byte(quitReq))
 
 	logger.Info().Msgf("Test finished for the factor %d:", pwdReq.Strength)
 	logger.Info().Int("  num tests", stats[0].Count).Send()

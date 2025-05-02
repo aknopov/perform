@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -71,13 +74,28 @@ var (
 	}
 )
 
-func TestAssertNoErr(t *testing.T) {
+func TestAssertNoErrOnSucess(t *testing.T) {
 	assertT := assert.New(t)
 
-	assertT.NotPanics(func() { assertNoErr(nil, "No error expected") })
+	assertT.Equal(123, assertNoErr(123, nil))
+}
 
-	err := errors.New("Here you are")
-	assertT.Panics(func() { assertNoErr(err, "Explanation") })
+func TestExitOnError(t *testing.T) {
+	assertT := assert.New(t)
+
+	// Testing exit code by starting external "go test""
+	doTest := os.Getenv("DO_TEST")
+	if doTest != "" {
+		_ = assertNoErr("fail", fmt.Errorf("test error"))
+		return // just in case
+	}
+
+	cmd := exec.Command(os.Args[0], "--test.run=TestExitOnError")
+	cmd.Env = append(os.Environ(), "DO_TEST=yes")
+    err := cmd.Run()
+	e := err.(*exec.ExitError)
+	assertT.Error(e)
+	assertT.Equal(1, e.ExitCode())
 }
 
 func TestIsContainerAlive(t *testing.T) {

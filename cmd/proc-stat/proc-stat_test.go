@@ -47,13 +47,13 @@ func TestExitOnNoProcess(t *testing.T) {
 	// Testing exit code by starting external "go test""
 	testPid := os.Getenv("TEST_PID")
 	if testPid != "" {
-        getProcPid(testPid)
-        return
-    }
+		getProcPid(testPid)
+		return // just in case
+	}
 
 	cmd := exec.Command(os.Args[0], "--test.run=TestExitOnNoProcess")
 	cmd.Env = append(os.Environ(), "TEST_PID=boo")
-    err := cmd.Run()
+	err := cmd.Run()
 	e := err.(*exec.ExitError)
 	assertT.Error(e)
 	assertT.Equal(1, e.ExitCode())
@@ -108,11 +108,11 @@ func TestNetIO(t *testing.T) {
 	prevRx = 0
 	prevTx = 0
 	// First values yield 0
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Tx))
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Rx))
+	assertT.EqualValues(0, getValue(qProc, 0, testNetIO, pm.Tx))
+	assertT.EqualValues(0, getValue(qProc, 0, testNetIO, pm.Rx))
 	// Following values are based on the first
-	assertT.EqualValues(2, getValue(qProc, testNetIO2, pm.Tx))
-	assertT.EqualValues(3, getValue(qProc, testNetIO2, pm.Rx))
+	assertT.EqualValues(2, getValue(qProc, 0, testNetIO2, pm.Tx))
+	assertT.EqualValues(3, getValue(qProc, 0, testNetIO2, pm.Rx))
 }
 
 func TestPollStats(t *testing.T) {
@@ -179,14 +179,62 @@ func TestGetValue(t *testing.T) {
 	newGetNumCPU := func() int { return 256 }
 	defer replaceFunPlain(&getNumCPU, newGetNumCPU)()
 
-	assertT.EqualValues(1234+555, getValue(qProc, testNetIO, pm.Cpu))
-	assertT.EqualValues(1024, getValue(qProc, testNetIO, pm.Mem))
-	assertT.EqualValues(256, getValue(qProc, testNetIO, pm.CPUs))
-	assertT.EqualValues(13, getValue(qProc, testNetIO, pm.PIDs))
+	assertT.EqualValues(1234+555, getValue(qProc, 0, testNetIO, pm.Cpu))
+	assertT.EqualValues(1024, getValue(qProc, 0, testNetIO, pm.Mem))
+	assertT.EqualValues(256, getValue(qProc, 0, testNetIO, pm.CPUs))
+	assertT.EqualValues(13, getValue(qProc, 0, testNetIO, pm.PIDs))
 	// measurement starts from 0 - see TestNetIO
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Tx))
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Rx))
-	assertT.Panics(func() { getValue(qProc, testNetIO, pm.Rx+100) })
+	assertT.EqualValues(0, getValue(qProc, 0, testNetIO, pm.Tx))
+	assertT.EqualValues(0, getValue(qProc, 0, testNetIO, pm.Rx))
+	assertT.Panics(func() { getValue(qProc, 0, testNetIO, pm.Rx+100) })
+}
+
+func TestGetProcCycles(t *testing.T) {
+	assertT := assert.New(t)
+
+	mockBenchEnd := func() uint64 { return 2100000 }
+	replaceFunPlain(&benchEnd, mockBenchEnd)
+	cyclesOverhead = 100000
+
+	qProc := NewMockQIQProcess(t)
+	qProc.EXPECT().Percent(time.Duration(0)).Return(90, nil).Once()
+
+	assertT.EqualValues(900000, getProcCycles(qProc, 1000000))
+}
+
+func TestPollCyclesStats(t *testing.T) {
+	assertT := assert.New(t)
+
+	mockProcess := NewMockPsProcess(t)
+	mockProcess.EXPECT().Pid().Return(123)
+
+	qProc := NewMockQIQProcess(t)
+	qProc.EXPECT().GetPID().Return(123).Times(2)
+	qProc.EXPECT().Percent(time.Duration(0)).Return(90, nil).Once()
+
+	cnt := 0
+	testFindProcess := func(pid int) (ps.Process, error) {
+		cnt++
+		if cnt == 1 {
+			return mockProcess, nil
+		} else {
+			return nil, errTest
+		}
+	}
+	defer replaceFun1(&findProcess, testFindProcess)()
+
+	benchStartCalls := 0
+	benchEndCalls := 0
+	mockBenchStart := func() uint64 { benchStartCalls++; return 0 }
+	replaceFunPlain(&benchStart, mockBenchStart)
+	mockBenchEnd := func() uint64 { benchEndCalls++; return 0 }
+	replaceFunPlain(&benchEnd, mockBenchEnd)
+
+	paramList := pm.ParamList{pm.Cyc}
+	pollStats(qProc, paramList, 100*time.Millisecond)
+
+	assertT.Equal(2, benchStartCalls)
+	assertT.Equal(2, benchEndCalls)
 }
 
 func TestGetValueRecovery(t *testing.T) {
@@ -199,11 +247,11 @@ func TestGetValueRecovery(t *testing.T) {
 	qProc.EXPECT().MemoryInfo().Return(nil, errTest).Once()
 	qProc.EXPECT().NumThreads().Return(0, errTest)
 
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Cpu))
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Mem))
-	assertT.EqualValues(-1, getValue(qProc, testNetIO, pm.PIDs))
-	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Tx))
-	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Rx))
+	assertT.EqualValues(0, getValue(qProc, 0, testNetIO, pm.Cpu))
+	assertT.EqualValues(0, getValue(qProc, 0, testNetIO, pm.Mem))
+	assertT.EqualValues(-1, getValue(qProc, 0, testNetIO, pm.PIDs))
+	assertT.EqualValues(0, getValue(qProc, 0, NO_NET_IO, pm.Tx))
+	assertT.EqualValues(0, getValue(qProc, 0, NO_NET_IO, pm.Rx))
 }
 
 func TestUsage(t *testing.T) {
