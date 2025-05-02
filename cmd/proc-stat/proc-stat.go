@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aknopov/perform"
 	pm "github.com/aknopov/perform/cmd/param"
+	"github.com/dterei/gotsc"
 	ps "github.com/mitchellh/go-ps"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/net"
@@ -26,6 +28,8 @@ var (
 	getProcessList = ps.Processes
 	findProcess    = ps.FindProcess
 	getNumCPU      = runtime.NumCPU
+	benchStart     = gotsc.BenchStart
+	benchEnd       = gotsc.BenchEnd
 )
 
 func main() {
@@ -48,11 +52,18 @@ func main() {
 	pollStats(pm.NewQProcess(p), paramList, refreshPeriod)
 }
 
+func reduceArg[A any, R any](f func(A) (R, error), arg A) func() (R, error) {
+	return func() (R, error) { return f(arg) }
+}
+
 func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Duration) {
 
-	getProcNetFn := func() ([]net.IOCountersStat, error) { return proc.NetIOCounters(false) }
-	queryNet := checkIfNetAsked(paramList)
+	getProcNetFn := reduceArg(proc.NetIOCounters, false)
+	queryNet := slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx)
 	netInfo := NO_NET_IO
+	cyclesStart := uint64(0)
+
+	cyclesStart = benchStart()
 
 	ticker := time.NewTicker(refreshPeriod)
 	values := make([]float64, len(paramList))
@@ -67,20 +78,15 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 		}
 
 		for i, p := range paramList {
-			values[i] = getValue(proc, netInfo, p)
+			values[i] = getValue(proc, cyclesStart, netInfo, p)
 		}
+
+		cyclesStart = benchStart()
 
 		pm.PrintValues(os.Stdout, paramList, values)
 	}
-}
 
-func checkIfNetAsked(paramList pm.ParamList) bool {
-	for _, p := range paramList {
-		if p == pm.Tx || p == pm.Rx {
-			return true
-		}
-	}
-	return false
+	_ = benchEnd()
 }
 
 var (
@@ -88,7 +94,7 @@ var (
 	prevTx uint64 = 0
 )
 
-func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
+func getValue(proc pm.IQProcess, cyclesStart uint64, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
 
 	switch p {
 	case pm.Cpu:
@@ -119,9 +125,25 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 			prevRx = rxBytes
 		}
 		return float64(rxBytes-prevRx) / 1024
+	case pm.Cyc:
+		return getProcCycles(proc, cyclesStart)
 	default:
 		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
+}
+
+var (
+	// See https://community.intel.com/t5/Intel-ISA-Extensions/Measure-the-execution-time-using-RDTSC/td-p/1365538
+	cyclesOverhead = gotsc.TSCOverhead()
+	cyclesTotal    = 0.0
+)
+
+func getProcCycles(proc pm.IQProcess, cyclesStart uint64) float64 {
+	delta := benchEnd() - cyclesStart - cyclesOverhead
+	getCpuPerc := reduceArg(proc.Percent, 0)
+	f := perform.AssumeOnErr(getCpuPerc, 0)
+	cyclesTotal += f * float64(delta) / 100
+	return cyclesTotal
 }
 
 func getProcPid(cmd string) int {
@@ -139,7 +161,7 @@ func getProcPid(cmd string) int {
 
 	fmt.Fprintf(os.Stderr, "Can't find process with PID or command line '%s'\n", cmd)
 	os.Exit(1)
-	
+
 	return -1
 }
 
@@ -160,5 +182,6 @@ proc - process ID or command line
   PIDs - number of process threads
   CPUs - number of host processors available to the process
   Rx - total network read rate (KB)
-  Tx - total network write rate (KB)`)
+  Tx - total network write rate (KB)
+  Cyc - total CPU cycles for the process (AMD64 only)`)
 }

@@ -89,16 +89,6 @@ func TestIsProcessAliveFail(t *testing.T) {
 
 	assertT.False(isProcessAlive(123))
 }
-
-func TestCheckIfNetAsked(t *testing.T) {
-	assertT := assert.New(t)
-
-	assertT.False(checkIfNetAsked(pm.ParamList{}))
-	assertT.False(checkIfNetAsked(pm.ParamList{pm.CPUs, pm.PIDs}))
-	assertT.True(checkIfNetAsked(pm.ParamList{pm.CPUs, pm.PIDs, pm.Tx}))
-	assertT.True(checkIfNetAsked(pm.ParamList{pm.CPUs, pm.PIDs, pm.Rx}))
-}
-
 func TestNetIO(t *testing.T) {
 	assertT := assert.New(t)
 

@@ -27,9 +27,11 @@ const (
 	Rx
 	// Transmitted data rate in KB/sec
 	Tx
+	// CPU cycles (AMD64)
+	Cyc
 
 	paramFirst = Cpu
-	paramLast  = Tx
+	paramLast  = Cyc
 )
 
 var (
@@ -40,6 +42,7 @@ var (
 		"CPUs": CPUs,
 		"Rx":   Rx,
 		"Tx":   Tx,
+		"Cyc":  Cyc,
 	}
 
 	nameMap = map[ParamType]string{
@@ -49,6 +52,7 @@ var (
 		CPUs: "CPUs",
 		Rx:   "Rx (KB)",
 		Tx:   "Tx (KB)",
+		Cyc:  "CPU cycles",
 	}
 
 	formatMap = map[ParamType]string{
@@ -58,6 +62,7 @@ var (
 		CPUs: " %*.0f",
 		Rx:   " %*.2f",
 		Tx:   " %*.2f",
+		Cyc:  " %*.0f",
 	}
 )
 

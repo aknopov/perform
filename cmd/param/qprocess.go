@@ -1,6 +1,8 @@
 package param
 
 import (
+	"time"
+
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
@@ -13,6 +15,7 @@ type IQProcess interface {
 	NetIOCounters(pernic bool) ([]net.IOCountersStat, error)
 	NumThreads() (int32, error)
 	Times() (*cpu.TimesStat, error)
+	Percent(time.Duration) (float64, error)
 }
 
 // Wrapper for process.Process for mocking in public

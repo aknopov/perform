@@ -74,6 +74,7 @@ require (
 	github.com/aknopov/fancylogger v0.0.5
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/docker v28.1.1+incompatible
+	github.com/dterei/gotsc v0.0.0-20160722215413-e78f872945c6
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
