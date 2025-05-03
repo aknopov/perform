@@ -11,7 +11,8 @@ import (
 
 	"github.com/aknopov/perform"
 	pm "github.com/aknopov/perform/cmd/param"
-	"github.com/dterei/gotsc"
+	tc "github.com/aknopov/perform/tickcount"
+
 	ps "github.com/mitchellh/go-ps"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/net"
@@ -28,8 +29,7 @@ var (
 	getProcessList = ps.Processes
 	findProcess    = ps.FindProcess
 	getNumCPU      = runtime.NumCPU
-	benchStart     = gotsc.BenchStart
-	benchEnd       = gotsc.BenchEnd
+	tickCountF     = tc.TickCount
 )
 
 func main() {
@@ -61,9 +61,6 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 	getProcNetFn := reduceArg(proc.NetIOCounters, false)
 	queryNet := slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx)
 	netInfo := NO_NET_IO
-	cyclesStart := uint64(0)
-
-	cyclesStart = benchStart()
 
 	ticker := time.NewTicker(refreshPeriod)
 	values := make([]float64, len(paramList))
@@ -78,15 +75,11 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 		}
 
 		for i, p := range paramList {
-			values[i] = getValue(proc, cyclesStart, netInfo, p)
+			values[i] = getValue(proc, netInfo, p)
 		}
-
-		cyclesStart = benchStart()
 
 		pm.PrintValues(os.Stdout, paramList, values)
 	}
-
-	_ = benchEnd()
 }
 
 var (
@@ -94,7 +87,7 @@ var (
 	prevTx uint64 = 0
 )
 
-func getValue(proc pm.IQProcess, cyclesStart uint64, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
+func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
 
 	switch p {
 	case pm.Cpu:
@@ -126,7 +119,7 @@ func getValue(proc pm.IQProcess, cyclesStart uint64, netInfo []net.IOCountersSta
 		}
 		return float64(rxBytes-prevRx) / 1024
 	case pm.Cyc:
-		return getProcCycles(proc, cyclesStart)
+		return getProcCycles(proc)
 	default:
 		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
@@ -134,12 +127,15 @@ func getValue(proc pm.IQProcess, cyclesStart uint64, netInfo []net.IOCountersSta
 
 var (
 	// See https://community.intel.com/t5/Intel-ISA-Extensions/Measure-the-execution-time-using-RDTSC/td-p/1365538
-	cyclesOverhead = gotsc.TSCOverhead()
-	cyclesTotal    = 0.0
+	tickOverhead = tc.TickCountOverhead()
+	prevTickCnt   = tickCountF()
+	cyclesTotal  = 0.0
 )
 
-func getProcCycles(proc pm.IQProcess, cyclesStart uint64) float64 {
-	delta := benchEnd() - cyclesStart - cyclesOverhead
+func getProcCycles(proc pm.IQProcess) float64 {
+	currTickCnt := tickCountF()
+	delta := currTickCnt - prevTickCnt - tickOverhead
+	prevTickCnt = currTickCnt
 	getCpuPerc := reduceArg(proc.Percent, 0)
 	f := perform.AssumeOnErr(getCpuPerc, 0)
 	cyclesTotal += f * float64(delta) / 100
