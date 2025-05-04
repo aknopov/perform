@@ -15,6 +15,7 @@ import (
 
 var (
 	NO_STAT = &container.StatsResponse{}
+	NO_TIME = time.Time{}
 )
 
 func main() {
@@ -106,13 +107,11 @@ func getValue(dockerInfo *system.Info, stats *container.StatsResponse, p param.P
 }
 
 var (
-	// PreCPUStats is empty?!!
+	// PreCPUStats and stats.PreRead are empty?!!
 	prevTotal  uint64
 	prevUser   uint64
 	prevKernel uint64
-	prevTime   time.Time
-	prevRx     uint64
-	prevTx     uint64
+	prevRead   time.Time
 )
 
 func calcCpuPerc(stats *container.StatsResponse) float64 {
@@ -123,10 +122,12 @@ func calcCpuPerc(stats *container.StatsResponse) float64 {
 	prevTotal = stats.CPUStats.CPUUsage.TotalUsage
 	prevUser = stats.CPUStats.CPUUsage.UsageInUsermode
 	prevKernel = stats.CPUStats.CPUUsage.UsageInKernelmode
+	defer func() { prevRead = stats.Read }()
 
-	if prevTotal == totalDelta || totalDelta == 0.0 {
+	if prevRead.IsZero() || totalDelta == 0.0 {
 		return 0.0
 	}
+
 	return float64(userDelta+kernelDelta) / float64(totalDelta) * 100.0 * float64(stats.CPUStats.OnlineCPUs)
 }
 
@@ -138,13 +139,7 @@ func calcNetIO(stats *container.StatsResponse) (float64, float64) {
 		txTotal += ns.TxBytes
 	}
 
-	if prevTime.IsZero() {
-		prevRx = rxTotal
-		prevTx = txTotal
-		prevTime = time.Now()
-	}
-
-	return float64(rxTotal-prevRx) / 1024, float64(txTotal-prevTx) / 1024
+	return float64(rxTotal) / 1024, float64(txTotal) / 1024
 }
 
 //nolint:errcheck
@@ -159,6 +154,6 @@ Usage: docker-stat -refresh=... -params=... containerId
   Mem - container memory usage (KB)
   PIDs - number of container threads
   CPUs - number of processors available to the container
-  Rx - total network read rate (KB)
-  Tx - total network write rate (KB)`)
+  Rx - total network read bytes (KB)
+  Tx - total network write bytes (KB)`)
 }

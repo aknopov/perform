@@ -27,8 +27,8 @@ var (
 		Read: time.Unix(100, 0),
 		Networks: map[string]container.NetworkStats{
 			"lo": {
-				RxBytes: 123 * 1024,
-				TxBytes: 512 * 1024,
+				RxBytes: 63 * 1024,
+				TxBytes: 287 * 1024,
 			},
 		},
 		CPUStats: container.CPUStats{
@@ -74,7 +74,7 @@ var (
 	}
 )
 
-func TestAssertNoErrOnSucess(t *testing.T) {
+func TestAssertNoErrOnSuccess(t *testing.T) {
 	assertT := assert.New(t)
 
 	assertT.Equal(123, assertNoErr(123, nil))
@@ -113,22 +113,17 @@ func TestIsContainerAlive(t *testing.T) {
 func TestCalcNetIO(t *testing.T) {
 	assertT := assert.New(t)
 
-	prevTime = time.Time{}
-
-	// The first call yeilds zeroes
-	rxRate, txRate := calcNetIO(&stats1)
-	assertT.Zero(rxRate)
-	assertT.Zero(txRate)
-
-	rxRate, txRate = calcNetIO(&stats2)
-	assertT.EqualValues(2, rxRate)
-	assertT.EqualValues(10, txRate)
+	rxTotal, txTotal := calcNetIO(&stats1)
+	assertT.EqualValues(63, rxTotal)
+	assertT.EqualValues(287, txTotal)
 }
 
 func TestCalcCpu(t *testing.T) {
 	assertT := assert.New(t)
 
-	// The first call yeilds zero
+	prevRead = NO_TIME
+
+	// The first call yields zero
 	assertT.Zero(calcCpuPerc(&stats1))
 	// The second uses deltas and CPU count
 	assertT.EqualValues(0.55, calcCpuPerc(&stats2))
@@ -140,7 +135,7 @@ func TestGetValue(t *testing.T) {
 	prevTotal = 0
 	prevUser = 0
 	prevKernel = 0
-	prevTime = time.Time{}
+	prevRead = NO_TIME
 
 	assertT.EqualValues(5, getValue(&dockerInfo, &stats1, param.CPUs))
 	assertT.EqualValues(12, getValue(&dockerInfo, &stats1, param.PIDs))
@@ -148,9 +143,9 @@ func TestGetValue(t *testing.T) {
 	assertT.EqualValues(21, getValue(&dockerInfo, &stats1, param.Cpu))
 	assertT.EqualValues(21, getValue(&dockerInfo, &stats1, param.Cpu))
 	getValue(&dockerInfo, &stats1, param.Rx)
-	assertT.EqualValues(2, getValue(&dockerInfo, &stats2, param.Rx))
+	assertT.EqualValues(125, getValue(&dockerInfo, &stats2, param.Rx))
 	getValue(&dockerInfo, &stats1, param.Tx)
-	assertT.EqualValues(10, getValue(&dockerInfo, &stats2, param.Tx))
+	assertT.EqualValues(522, getValue(&dockerInfo, &stats2, param.Tx))
 	getValue(&dockerInfo, &stats1, param.CpuPerc)
 	assertT.EqualValues(0.55, getValue(&dockerInfo, &stats2, param.CpuPerc))
 

@@ -82,11 +82,6 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 	}
 }
 
-var (
-	prevRx uint64 = 0
-	prevTx uint64 = 0
-)
-
 func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
 
 	switch p {
@@ -107,19 +102,13 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 		for _, ni := range netInfo {
 			txBytes += ni.BytesSent
 		}
-		if prevTx == 0 {
-			prevTx = txBytes
-		}
-		return float64(txBytes-prevTx) / 1024
+		return float64(txBytes) / 1024
 	case pm.Rx:
 		var rxBytes uint64
 		for _, ni := range netInfo {
 			rxBytes += ni.BytesRecv
 		}
-		if prevRx == 0 {
-			prevRx = rxBytes
-		}
-		return float64(rxBytes-prevRx) / 1024
+		return float64(rxBytes) / 1024
 	case pm.Cyc:
 		return getProcCycles(proc)
 	default:
@@ -188,7 +177,7 @@ proc - process ID or command line
   Mem - process memory usage (KB)
   PIDs - number of process threads
   CPUs - number of host processors available to the process
-  Rx - total network read rate (KB)
-  Tx - total network write rate (KB)
+  Rx - total network read bytes (KB)
+  Tx - total network write bytes (KB)
   Cyc - total CPU cycles for the process (AMD64 only)`)
 }

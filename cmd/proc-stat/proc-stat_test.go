@@ -19,7 +19,7 @@ import (
 var (
 	testTimes  = cpu.TimesStat{User: 1234, System: 555}
 	testMemory = process.MemoryInfoStat{RSS: 1024 * 1024}
-	testNetIO  = []net.IOCountersStat{{BytesSent: 22222, BytesRecv: 33333}}
+	testNetIO  = []net.IOCountersStat{{BytesSent: 2 * 1024, BytesRecv: 3 * 1024}}
 	errTest    = fmt.Errorf("test error")
 )
 
@@ -93,16 +93,9 @@ func TestNetIO(t *testing.T) {
 	assertT := assert.New(t)
 
 	qProc := NewMockQIQProcess(t)
-	testNetIO2 := []net.IOCountersStat{{BytesSent: 22222 + 2*1024, BytesRecv: 33333 + 3*1024}}
 
-	prevRx = 0
-	prevTx = 0
-	// First values yield 0
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Tx))
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Rx))
-	// Following values are based on the first
-	assertT.EqualValues(2, getValue(qProc, testNetIO2, pm.Tx))
-	assertT.EqualValues(3, getValue(qProc, testNetIO2, pm.Rx))
+	assertT.EqualValues(2, getValue(qProc, testNetIO, pm.Tx))
+	assertT.EqualValues(3, getValue(qProc, testNetIO, pm.Rx))
 }
 
 func TestPollStats(t *testing.T) {
@@ -130,8 +123,6 @@ func TestPollStats(t *testing.T) {
 }
 
 func TestPollStatsWithNet(t *testing.T) {
-	prevRx = 0
-	prevTx = 0
 	mockProcess := NewMockPsProcess(t)
 	mockProcess.EXPECT().Pid().Return(123)
 
@@ -159,8 +150,6 @@ func TestPollStatsWithNet(t *testing.T) {
 func TestGetValue(t *testing.T) {
 	assertT := assert.New(t)
 
-	prevRx = 0
-	prevTx = 0
 	cpuPercent = 0
 	qProc := NewMockQIQProcess(t)
 	qProc.EXPECT().Times().Return(&testTimes, nil)
@@ -176,8 +165,8 @@ func TestGetValue(t *testing.T) {
 	assertT.EqualValues(256, getValue(qProc, testNetIO, pm.CPUs))
 	assertT.EqualValues(13, getValue(qProc, testNetIO, pm.PIDs))
 	// measurement starts from 0 - see TestNetIO
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Tx))
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Rx))
+	assertT.EqualValues(2, getValue(qProc, testNetIO, pm.Tx))
+	assertT.EqualValues(3, getValue(qProc, testNetIO, pm.Rx))
 	assertT.EqualValues(44, getValue(qProc, testNetIO, pm.CpuPerc))
 
 	assertT.Panics(func() { getValue(qProc, testNetIO, pm.Rx+100) })
@@ -232,8 +221,6 @@ func TestPollCyclesStats(t *testing.T) {
 func TestGetValueRecovery(t *testing.T) {
 	assertT := assert.New(t)
 
-	prevRx = 0
-	prevTx = 0
 	qProc := NewMockQIQProcess(t)
 	qProc.EXPECT().Times().Return(nil, errTest).Once()
 	qProc.EXPECT().MemoryInfo().Return(nil, errTest).Once()
