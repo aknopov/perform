@@ -92,7 +92,7 @@ func TestExitOnError(t *testing.T) {
 
 	cmd := exec.Command(os.Args[0], "--test.run=TestExitOnError")
 	cmd.Env = append(os.Environ(), "DO_TEST=yes")
-    err := cmd.Run()
+	err := cmd.Run()
 	e := err.(*exec.ExitError)
 	assertT.Error(e)
 	assertT.Equal(1, e.ExitCode())
@@ -129,9 +129,9 @@ func TestCalcCpu(t *testing.T) {
 	assertT := assert.New(t)
 
 	// The first call yeilds zero
-	assertT.Zero(calcCpu(&stats1))
+	assertT.Zero(calcCpuPerc(&stats1))
 	// The second uses deltas and CPU count
-	assertT.Equal(float32(0.55), calcCpu(&stats2))
+	assertT.EqualValues(0.55, calcCpuPerc(&stats2))
 }
 
 func TestGetValue(t *testing.T) {
@@ -151,6 +151,8 @@ func TestGetValue(t *testing.T) {
 	assertT.EqualValues(2, getValue(&dockerInfo, &stats2, param.Rx))
 	getValue(&dockerInfo, &stats1, param.Tx)
 	assertT.EqualValues(10, getValue(&dockerInfo, &stats2, param.Tx))
+	getValue(&dockerInfo, &stats1, param.CpuPerc)
+	assertT.EqualValues(0.55, getValue(&dockerInfo, &stats2, param.CpuPerc))
 
 	assertT.Panics(func() { getValue(&dockerInfo, &stats1, param.Tx+100) })
 }

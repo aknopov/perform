@@ -15,6 +15,7 @@ func TickCount() uint64 {
 	return TickCountA()
 }
 
+// See https://community.intel.com/t5/Intel-ISA-Extensions/Measure-the-execution-time-using-RDTSC/td-p/1365538
 func TickCountOverhead() uint64 {
 	ovhd := uint64(math.MaxUint64)
 

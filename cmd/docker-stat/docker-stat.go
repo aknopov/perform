@@ -98,6 +98,8 @@ func getValue(dockerInfo *system.Info, stats *container.StatsResponse, p param.P
 		return tx
 	case param.Cpu:
 		return float64((stats.CPUStats.CPUUsage.UsageInUsermode + stats.CPUStats.CPUUsage.UsageInKernelmode) / uint64(time.Millisecond))
+	case param.CpuPerc:
+		return calcCpuPerc(stats)
 	default:
 		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
@@ -113,7 +115,7 @@ var (
 	prevTx     uint64
 )
 
-func calcCpu(stats *container.StatsResponse) float32 {
+func calcCpuPerc(stats *container.StatsResponse) float64 {
 	totalDelta := stats.CPUStats.CPUUsage.TotalUsage - prevTotal
 	userDelta := stats.CPUStats.CPUUsage.UsageInUsermode - prevUser
 	kernelDelta := stats.CPUStats.CPUUsage.UsageInKernelmode - prevKernel
@@ -125,7 +127,7 @@ func calcCpu(stats *container.StatsResponse) float32 {
 	if prevTotal == totalDelta || totalDelta == 0.0 {
 		return 0.0
 	}
-	return float32(float64(userDelta+kernelDelta)/float64(totalDelta)) * 100.0 * float32(stats.CPUStats.OnlineCPUs)
+	return float64(userDelta+kernelDelta) / float64(totalDelta) * 100.0 * float64(stats.CPUStats.OnlineCPUs)
 }
 
 func calcNetIO(stats *container.StatsResponse) (float64, float64) {
@@ -153,6 +155,7 @@ Usage: docker-stat -refresh=... -params=... containerId
 -refresh - interval in seconds (default 1.0 sec)
 -params - comma separated list of
   Cpu - total CPU time (msec) spent on runing container
+  CpuPerc - percentage of the host's CPU usage
   Mem - container memory usage (KB)
   PIDs - number of container threads
   CPUs - number of processors available to the container

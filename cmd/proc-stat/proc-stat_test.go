@@ -161,10 +161,12 @@ func TestGetValue(t *testing.T) {
 
 	prevRx = 0
 	prevTx = 0
+	cpuPercent = 0
 	qProc := NewMockQIQProcess(t)
 	qProc.EXPECT().Times().Return(&testTimes, nil)
 	qProc.EXPECT().MemoryInfo().Return(&testMemory, nil)
 	qProc.EXPECT().NumThreads().Return(13, nil)
+	qProc.EXPECT().Percent(time.Duration(0)).Return(44, nil)
 
 	newGetNumCPU := func() int { return 256 }
 	defer replaceFunPlain(&getNumCPU, newGetNumCPU)()
@@ -176,6 +178,8 @@ func TestGetValue(t *testing.T) {
 	// measurement starts from 0 - see TestNetIO
 	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Tx))
 	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Rx))
+	assertT.EqualValues(44, getValue(qProc, testNetIO, pm.CpuPerc))
+
 	assertT.Panics(func() { getValue(qProc, testNetIO, pm.Rx+100) })
 }
 
@@ -186,6 +190,7 @@ func TestGetProcCycles(t *testing.T) {
 	replaceFunPlain(&tickCountF, mockTickCountF)
 	tickOverhead = 100
 	prevTickCnt = 0
+	lastCpuTime = time.Time{}
 
 	qProc := NewMockQIQProcess(t)
 	qProc.EXPECT().Percent(time.Duration(0)).Return(90, nil).Once()

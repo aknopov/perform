@@ -17,6 +17,8 @@ type ParamList []ParamType
 const (
 	// CPU time (user + kernel) in milliseconds
 	Cpu ParamType = iota
+	// CPU use percentage, max = 100 * NumProcs
+	CpuPerc
 	// Memory use in kilobytes
 	Mem
 	// Number of Docker "PIDs"
@@ -36,33 +38,36 @@ const (
 
 var (
 	convertMap = map[string]ParamType{
-		"Cpu":  Cpu,
-		"Mem":  Mem,
-		"PIDs": PIDs,
-		"CPUs": CPUs,
-		"Rx":   Rx,
-		"Tx":   Tx,
-		"Cyc":  Cyc,
+		"Cpu":     Cpu,
+		"CpuPerc": CpuPerc,
+		"Mem":     Mem,
+		"PIDs":    PIDs,
+		"CPUs":    CPUs,
+		"Rx":      Rx,
+		"Tx":      Tx,
+		"Cyc":     Cyc,
 	}
 
 	nameMap = map[ParamType]string{
-		Cpu:  "CPU (ms)",
-		Mem:  "Mem (KB)",
-		PIDs: "PIDs",
-		CPUs: "CPUs",
-		Rx:   "Rx (KB)",
-		Tx:   "Tx (KB)",
-		Cyc:  "CPU cycles",
+		Cpu:     "CPU (ms)",
+		CpuPerc: "CPU%",
+		Mem:     "Mem (KB)",
+		PIDs:    "PIDs",
+		CPUs:    "CPUs",
+		Rx:      "Rx (KB)",
+		Tx:      "Tx (KB)",
+		Cyc:     "CPU cycles",
 	}
 
 	formatMap = map[ParamType]string{
-		Cpu:  " %*.2f",
-		Mem:  " %*.0f",
-		PIDs: " %*.0f",
-		CPUs: " %*.0f",
-		Rx:   " %*.2f",
-		Tx:   " %*.2f",
-		Cyc:  " %*.0f",
+		Cpu:     " %*.2f",
+		CpuPerc: " %*.2f",
+		Mem:     " %*.0f",
+		PIDs:    " %*.0f",
+		CPUs:    " %*.0f",
+		Rx:      " %*.2f",
+		Tx:      " %*.2f",
+		Cyc:     " %*.0f",
 	}
 )
 

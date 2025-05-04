@@ -93,6 +93,8 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 	case pm.Cpu:
 		ts := perform.AssumeOnErr(proc.Times, NO_TIMESTAT)
 		return ts.User + ts.System // Also: Total()
+	case pm.CpuPerc:
+		return calcPercent(proc)
 	case pm.Mem:
 		memInfo := perform.AssumeOnErr(proc.MemoryInfo, NO_MEMSTAT)
 		return float64(memInfo.RSS) / 1024
@@ -126,20 +128,28 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 }
 
 var (
-	// See https://community.intel.com/t5/Intel-ISA-Extensions/Measure-the-execution-time-using-RDTSC/td-p/1365538
 	tickOverhead = tc.TickCountOverhead()
-	prevTickCnt   = tickCountF()
+	prevTickCnt  = tickCountF()
 	cyclesTotal  = 0.0
+	lastCpuTime  = time.Now()
+	cpuPercent   = 0.0
 )
 
 func getProcCycles(proc pm.IQProcess) float64 {
 	currTickCnt := tickCountF()
 	delta := currTickCnt - prevTickCnt - tickOverhead
 	prevTickCnt = currTickCnt
-	getCpuPerc := reduceArg(proc.Percent, 0)
-	f := perform.AssumeOnErr(getCpuPerc, 0)
+	f := calcPercent(proc)
 	cyclesTotal += f * float64(delta) / 100
 	return cyclesTotal
+}
+
+func calcPercent(proc pm.IQProcess) float64 {
+	if time.Since(lastCpuTime) > 10*time.Millisecond {
+		cpuPercent = perform.AssumeOnErr(reduceArg(proc.Percent, 0), 0)
+		lastCpuTime = time.Now()
+	}
+	return cpuPercent
 }
 
 func getProcPid(cmd string) int {
@@ -173,7 +183,8 @@ Usage: proc-stat -refresh=... -params=... proc
 proc - process ID or command line
 -refresh - interval in seconds (default 1.0 sec)
 -params - comma separated list of:
-  Cpu - total CPU time (msec) spent on runing process
+  Cpu - total CPU time (msec) spent on running process
+  CpuPerc - percentage of the CPU usage by the process (%)
   Mem - process memory usage (KB)
   PIDs - number of process threads
   CPUs - number of host processors available to the process
