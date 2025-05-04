@@ -25,6 +25,7 @@ var (
 	NO_NET_IO   = []net.IOCountersStat{}
 )
 
+// Function substitutions for unit tests
 var (
 	getProcessList = ps.Processes
 	findProcess    = ps.FindProcess
@@ -117,7 +118,6 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 }
 
 var (
-	tickOverhead = tc.TickCountOverhead()
 	prevTickCnt  = tickCountF()
 	cyclesTotal  = 0.0
 	lastCpuTime  = time.Now()
@@ -126,10 +126,9 @@ var (
 
 func getProcCycles(proc pm.IQProcess) float64 {
 	currTickCnt := tickCountF()
-	delta := currTickCnt - prevTickCnt - tickOverhead
+	delta := currTickCnt - prevTickCnt
 	prevTickCnt = currTickCnt
-	f := calcPercent(proc)
-	cyclesTotal += f * float64(delta) / 100
+	cyclesTotal += calcPercent(proc) * float64(delta) / 100
 	return cyclesTotal
 }
 
@@ -179,5 +178,5 @@ proc - process ID or command line
   CPUs - number of host processors available to the process
   Rx - total network read bytes (KB)
   Tx - total network write bytes (KB)
-  Cyc - total CPU cycles for the process (AMD64 only)`)
+  Cyc - total CPU cycles for the process (AMD64 and PPC64 only)`)
 }

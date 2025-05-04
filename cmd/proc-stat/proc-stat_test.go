@@ -9,6 +9,7 @@ import (
 	"time"
 
 	pm "github.com/aknopov/perform/cmd/param"
+	"github.com/aknopov/perform/mocker"
 	ps "github.com/mitchellh/go-ps"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/net"
@@ -30,10 +31,8 @@ func TestGetProcPid(t *testing.T) {
 	mockProcess.EXPECT().Pid().Return(123)
 	mockProcess.EXPECT().Executable().Return("prog")
 
-	testGetProcessList := func() ([]ps.Process, error) {
-		return []ps.Process{mockProcess}, nil
-	}
-	defer replaceFun0(&getProcessList, testGetProcessList)()
+	testGetProcessList := func() ([]ps.Process, error) { return []ps.Process{mockProcess}, nil }
+	defer mocker.ReplaceItem(&getProcessList, testGetProcessList)()
 
 	pid := getProcPid("prog")
 	assertT.Equal(123, pid)
@@ -65,10 +64,8 @@ func TestIsProcessAlive(t *testing.T) {
 	mockProcess := NewMockPsProcess(t)
 	mockProcess.EXPECT().Pid().Return(123)
 
-	testFindProcess := func(pid int) (ps.Process, error) {
-		return mockProcess, nil
-	}
-	defer replaceFun1(&findProcess, testFindProcess)()
+	testFindProcess := func(pid int) (ps.Process, error) { return mockProcess, nil }
+	defer mocker.ReplaceItem(&findProcess, testFindProcess)()
 
 	assertT.True(isProcessAlive(123))
 }
@@ -76,10 +73,8 @@ func TestIsProcessAlive(t *testing.T) {
 func TestIsProcessAliveFail(t *testing.T) {
 	assertT := assert.New(t)
 
-	testFindProcess := func(pid int) (ps.Process, error) {
-		return nil, errTest
-	}
-	defer replaceFun1(&findProcess, testFindProcess)()
+	testFindProcess := func(pid int) (ps.Process, error) { return nil, errTest }
+	defer mocker.ReplaceItem(&findProcess, testFindProcess)()
 
 	assertT.False(isProcessAlive(123))
 
@@ -115,7 +110,7 @@ func TestPollStats(t *testing.T) {
 			return nil, errTest
 		}
 	}
-	defer replaceFun1(&findProcess, testFindProcess)()
+	defer mocker.ReplaceItem(&findProcess, testFindProcess)()
 
 	paramList := pm.ParamList{pm.Cpu}
 
@@ -140,7 +135,7 @@ func TestPollStatsWithNet(t *testing.T) {
 			return nil, errTest
 		}
 	}
-	defer replaceFun1(&findProcess, testFindProcess)()
+	defer mocker.ReplaceItem(&findProcess, testFindProcess)()
 
 	paramList := pm.ParamList{pm.Cpu, pm.Tx}
 
@@ -158,7 +153,7 @@ func TestGetValue(t *testing.T) {
 	qProc.EXPECT().Percent(time.Duration(0)).Return(44, nil)
 
 	newGetNumCPU := func() int { return 256 }
-	defer replaceFunPlain(&getNumCPU, newGetNumCPU)()
+	defer mocker.ReplaceItem(&getNumCPU, newGetNumCPU)()
 
 	assertT.EqualValues(1234+555, getValue(qProc, testNetIO, pm.Cpu))
 	assertT.EqualValues(1024, getValue(qProc, testNetIO, pm.Mem))
@@ -175,11 +170,10 @@ func TestGetValue(t *testing.T) {
 func TestGetProcCycles(t *testing.T) {
 	assertT := assert.New(t)
 
-	mockTickCountF := func() uint64 { return 1000100 }
-	replaceFunPlain(&tickCountF, mockTickCountF)
-	tickOverhead = 100
-	prevTickCnt = 0
-	lastCpuTime = time.Time{}
+	mockTickCountF := func() uint64 { return 1000000 }
+	defer mocker.ReplaceItem(&tickCountF, mockTickCountF)()
+	defer mocker.ReplaceItem(&prevTickCnt, 0)()
+	defer mocker.ReplaceItem(&lastCpuTime, time.Time{})()
 
 	qProc := NewMockQIQProcess(t)
 	qProc.EXPECT().Percent(time.Duration(0)).Return(90, nil).Once()
@@ -206,11 +200,11 @@ func TestPollCyclesStats(t *testing.T) {
 			return nil, errTest
 		}
 	}
-	defer replaceFun1(&findProcess, testFindProcess)()
+	defer mocker.ReplaceItem(&findProcess, testFindProcess)()
 
 	tiCountCalls := 0
 	mockTickCountF := func() uint64 { tiCountCalls++; return 0 }
-	replaceFunPlain(&tickCountF, mockTickCountF)
+	defer mocker.ReplaceItem(&tickCountF, mockTickCountF)()
 
 	paramList := pm.ParamList{pm.Cyc}
 	pollStats(qProc, paramList, 100*time.Millisecond)

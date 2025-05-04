@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aknopov/perform/cmd/param"
+	tc "github.com/aknopov/perform/tickcount"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
@@ -101,6 +102,8 @@ func getValue(dockerInfo *system.Info, stats *container.StatsResponse, p param.P
 		return float64((stats.CPUStats.CPUUsage.UsageInUsermode + stats.CPUStats.CPUUsage.UsageInKernelmode) / uint64(time.Millisecond))
 	case param.CpuPerc:
 		return calcCpuPerc(stats)
+	case param.Cyc:
+		return calcProcCycles(stats)
 	default:
 		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
@@ -112,9 +115,14 @@ var (
 	prevUser   uint64
 	prevKernel uint64
 	prevRead   time.Time
+	cpuPerc    float64
 )
 
 func calcCpuPerc(stats *container.StatsResponse) float64 {
+	if time.Since(prevRead) < 10*time.Millisecond {
+		return cpuPerc
+	}
+
 	totalDelta := stats.CPUStats.CPUUsage.TotalUsage - prevTotal
 	userDelta := stats.CPUStats.CPUUsage.UsageInUsermode - prevUser
 	kernelDelta := stats.CPUStats.CPUUsage.UsageInKernelmode - prevKernel
@@ -125,10 +133,27 @@ func calcCpuPerc(stats *container.StatsResponse) float64 {
 	defer func() { prevRead = stats.Read }()
 
 	if prevRead.IsZero() || totalDelta == 0.0 {
+		cpuPerc = 0
 		return 0.0
 	}
 
-	return float64(userDelta+kernelDelta) / float64(totalDelta) * 100.0 * float64(stats.CPUStats.OnlineCPUs)
+	cpuPerc = float64(userDelta+kernelDelta) / float64(totalDelta) * 100.0 * float64(stats.CPUStats.OnlineCPUs)
+	return cpuPerc
+}
+
+var (
+	tickCountF   = tc.TickCount
+	prevTickCnt  = tickCountF()
+	cyclesTotal  = 0.0
+)
+
+func calcProcCycles(stats *container.StatsResponse) float64 {
+	currTickCnt := tickCountF()
+	delta := currTickCnt - prevTickCnt
+	prevTickCnt = currTickCnt
+
+	cyclesTotal += calcCpuPerc(stats) * float64(delta) / 100
+	return cyclesTotal
 }
 
 func calcNetIO(stats *container.StatsResponse) (float64, float64) {
@@ -155,5 +180,6 @@ Usage: docker-stat -refresh=... -params=... containerId
   PIDs - number of container threads
   CPUs - number of processors available to the container
   Rx - total network read bytes (KB)
-  Tx - total network write bytes (KB)`)
+  Tx - total network write bytes (KB)
+  Cyc - total CPU cycles for the process (AMD64 and PPC64 only)`)
 }

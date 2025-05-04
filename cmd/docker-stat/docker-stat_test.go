@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aknopov/perform/cmd/param"
+	"github.com/aknopov/perform/mocker"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/system"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,7 @@ var (
 		CPUStats: container.CPUStats{
 			OnlineCPUs: 5,
 			CPUUsage: container.CPUUsage{
-				TotalUsage:        10000000000,
+				TotalUsage:        100000000,
 				UsageInUsermode:   20000000,
 				UsageInKernelmode: 1000000,
 			},
@@ -59,7 +60,7 @@ var (
 		CPUStats: container.CPUStats{
 			OnlineCPUs: 5,
 			CPUUsage: container.CPUUsage{
-				TotalUsage:        20000000000,
+				TotalUsage:        200000000,
 				UsageInUsermode:   30000000,
 				UsageInKernelmode: 2000000,
 			},
@@ -126,7 +127,22 @@ func TestCalcCpu(t *testing.T) {
 	// The first call yields zero
 	assertT.Zero(calcCpuPerc(&stats1))
 	// The second uses deltas and CPU count
-	assertT.EqualValues(0.55, calcCpuPerc(&stats2))
+	assertT.EqualValues(55, calcCpuPerc(&stats2))
+}
+
+func TestCalcProcCycles(t *testing.T) {
+	assertT := assert.New(t)
+
+	ticks := []uint64{1000000, 2000000}
+	pass := 0
+	mockTickCountF := func() uint64 { pass++; return ticks[pass-1] }
+	defer mocker.ReplaceItem(&tickCountF, mockTickCountF)()
+	defer mocker.ReplaceItem(&prevTickCnt, 0)()
+	defer mocker.ReplaceItem(&prevRead, NO_TIME)()
+
+	// The first call yields zero
+	assertT.Zero(calcProcCycles(&stats1))
+	assertT.EqualValues(550000, calcProcCycles(&stats2))
 }
 
 func TestGetValue(t *testing.T) {
@@ -147,7 +163,7 @@ func TestGetValue(t *testing.T) {
 	getValue(&dockerInfo, &stats1, param.Tx)
 	assertT.EqualValues(522, getValue(&dockerInfo, &stats2, param.Tx))
 	getValue(&dockerInfo, &stats1, param.CpuPerc)
-	assertT.EqualValues(0.55, getValue(&dockerInfo, &stats2, param.CpuPerc))
+	assertT.EqualValues(55, getValue(&dockerInfo, &stats2, param.CpuPerc))
 
 	assertT.Panics(func() { getValue(&dockerInfo, &stats1, param.Tx+100) })
 }
