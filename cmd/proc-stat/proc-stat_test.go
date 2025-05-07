@@ -145,19 +145,18 @@ func TestPollStatsWithNet(t *testing.T) {
 func TestGetValue(t *testing.T) {
 	assertT := assert.New(t)
 
-	cpuPercent = 0
 	qProc := NewMockQIQProcess(t)
 	qProc.EXPECT().Times().Return(&testTimes, nil)
 	qProc.EXPECT().MemoryInfo().Return(&testMemory, nil)
 	qProc.EXPECT().NumThreads().Return(13, nil)
 	qProc.EXPECT().Percent(time.Duration(0)).Return(44, nil)
 
-	newGetNumCPU := func() int { return 256 }
+	newGetNumCPU := func() int { return 1 }
 	defer mocker.ReplaceItem(&getNumCPU, newGetNumCPU)()
 
 	assertT.EqualValues(1234+555, getValue(qProc, testNetIO, pm.Cpu))
 	assertT.EqualValues(1024, getValue(qProc, testNetIO, pm.Mem))
-	assertT.EqualValues(256, getValue(qProc, testNetIO, pm.CPUs))
+	assertT.EqualValues(1, getValue(qProc, testNetIO, pm.CPUs))
 	assertT.EqualValues(13, getValue(qProc, testNetIO, pm.PIDs))
 	// measurement starts from 0 - see TestNetIO
 	assertT.EqualValues(2, getValue(qProc, testNetIO, pm.Tx))
@@ -167,23 +166,7 @@ func TestGetValue(t *testing.T) {
 	assertT.Panics(func() { getValue(qProc, testNetIO, pm.Rx+100) })
 }
 
-func TestGetProcCycles(t *testing.T) {
-	assertT := assert.New(t)
-
-	mockTickCountF := func() uint64 { return 1000000 }
-	defer mocker.ReplaceItem(&tickCountF, mockTickCountF)()
-	defer mocker.ReplaceItem(&prevTickCnt, 0)()
-	defer mocker.ReplaceItem(&lastCpuTime, time.Time{})()
-
-	qProc := NewMockQIQProcess(t)
-	qProc.EXPECT().Percent(time.Duration(0)).Return(90, nil).Once()
-
-	assertT.EqualValues(900000, getProcCycles(qProc))
-}
-
 func TestPollCyclesStats(t *testing.T) {
-	assertT := assert.New(t)
-
 	mockProcess := NewMockPsProcess(t)
 	mockProcess.EXPECT().Pid().Return(123)
 
@@ -192,24 +175,19 @@ func TestPollCyclesStats(t *testing.T) {
 	qProc.EXPECT().Percent(time.Duration(0)).Return(90, nil).Once()
 
 	cnt := 0
+	retVals := []struct {
+		p ps.Process
+		e error
+	}{{mockProcess, nil}, {nil, errTest}}
 	testFindProcess := func(pid int) (ps.Process, error) {
+		ret := retVals[cnt]
 		cnt++
-		if cnt == 1 {
-			return mockProcess, nil
-		} else {
-			return nil, errTest
-		}
+		return ret.p, ret.e
 	}
 	defer mocker.ReplaceItem(&findProcess, testFindProcess)()
 
-	tiCountCalls := 0
-	mockTickCountF := func() uint64 { tiCountCalls++; return 0 }
-	defer mocker.ReplaceItem(&tickCountF, mockTickCountF)()
-
 	paramList := pm.ParamList{pm.Cyc}
 	pollStats(qProc, paramList, 100*time.Millisecond)
-
-	assertT.Equal(1, tiCountCalls)
 }
 
 func TestGetValueRecovery(t *testing.T) {

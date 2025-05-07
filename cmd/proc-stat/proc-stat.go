@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/aknopov/perform"
+	"github.com/aknopov/perform/cmd/cpushare"
 	pm "github.com/aknopov/perform/cmd/param"
-	tc "github.com/aknopov/perform/tickcount"
 
 	ps "github.com/mitchellh/go-ps"
 	"github.com/shirou/gopsutil/cpu"
@@ -30,7 +30,6 @@ var (
 	getProcessList = ps.Processes
 	findProcess    = ps.FindProcess
 	getNumCPU      = runtime.NumCPU
-	tickCountF     = tc.TickCount
 )
 
 func main() {
@@ -85,12 +84,13 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 
 func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
 
+	provideCpuPerc := func() float64 { return perform.AssumeOnErr(reduceArg(proc.Percent, 0), 0) / float64(getNumCPU()) }
 	switch p {
 	case pm.Cpu:
 		ts := perform.AssumeOnErr(proc.Times, NO_TIMESTAT)
 		return ts.User + ts.System // Also: Total()
 	case pm.CpuPerc:
-		return calcCpuPerc(proc)
+		return cpushare.GetCpuPerc(provideCpuPerc)
 	case pm.Mem:
 		memInfo := perform.AssumeOnErr(proc.MemoryInfo, NO_MEMSTAT)
 		return float64(memInfo.RSS) / 1024
@@ -111,33 +111,10 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 		}
 		return float64(rxBytes) / 1024
 	case pm.Cyc:
-		return getProcCycles(proc)
+		return cpushare.GetProcCycles(provideCpuPerc)
 	default:
 		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
-}
-
-var (
-	prevTickCnt  = tickCountF()
-	cyclesTotal  = 0.0
-	lastCpuTime  = time.Now()
-	cpuPercent   = 0.0
-)
-
-func getProcCycles(proc pm.IQProcess) float64 {
-	currTickCnt := tickCountF()
-	delta := currTickCnt - prevTickCnt
-	prevTickCnt = currTickCnt
-	cyclesTotal += calcCpuPerc(proc) * float64(delta) / 100
-	return cyclesTotal
-}
-
-func calcCpuPerc(proc pm.IQProcess) float64 {
-	if time.Since(lastCpuTime) > 10*time.Millisecond {
-		cpuPercent = perform.AssumeOnErr(reduceArg(proc.Percent, 0), 0)
-		lastCpuTime = time.Now()
-	}
-	return cpuPercent
 }
 
 func getProcPid(cmd string) int {

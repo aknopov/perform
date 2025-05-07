@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/aknopov/perform/cmd/cpushare"
 	"github.com/aknopov/perform/cmd/param"
-	tc "github.com/aknopov/perform/tickcount"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
@@ -16,7 +16,6 @@ import (
 
 var (
 	NO_STAT = &container.StatsResponse{}
-	NO_TIME = time.Time{}
 )
 
 func main() {
@@ -85,6 +84,8 @@ func isContainerAlive(stats *container.StatsResponse) bool {
 }
 
 func getValue(dockerInfo *system.Info, stats *container.StatsResponse, p param.ParamType) float64 {
+	provideCpuPerc := func() float64 { return calcCpuPerc(stats) }
+
 	switch p {
 	case param.CPUs:
 		return float64(stats.CPUStats.OnlineCPUs)
@@ -101,28 +102,22 @@ func getValue(dockerInfo *system.Info, stats *container.StatsResponse, p param.P
 	case param.Cpu:
 		return float64((stats.CPUStats.CPUUsage.UsageInUsermode + stats.CPUStats.CPUUsage.UsageInKernelmode) / uint64(time.Millisecond))
 	case param.CpuPerc:
-		return calcCpuPerc(stats)
+		return cpushare.GetCpuPerc(provideCpuPerc)
 	case param.Cyc:
-		return calcProcCycles(stats)
+		return cpushare.GetProcCycles(provideCpuPerc)
 	default:
 		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
 }
 
 var (
-	// PreCPUStats and stats.PreRead are empty?!!
+	// PreCPUStats is empty?!!
 	prevTotal  uint64
 	prevUser   uint64
 	prevKernel uint64
-	prevRead   time.Time
-	cpuPerc    float64
 )
 
 func calcCpuPerc(stats *container.StatsResponse) float64 {
-	if time.Since(prevRead) < 10*time.Millisecond {
-		return cpuPerc
-	}
-
 	totalDelta := stats.CPUStats.CPUUsage.TotalUsage - prevTotal
 	userDelta := stats.CPUStats.CPUUsage.UsageInUsermode - prevUser
 	kernelDelta := stats.CPUStats.CPUUsage.UsageInKernelmode - prevKernel
@@ -130,30 +125,12 @@ func calcCpuPerc(stats *container.StatsResponse) float64 {
 	prevTotal = stats.CPUStats.CPUUsage.TotalUsage
 	prevUser = stats.CPUStats.CPUUsage.UsageInUsermode
 	prevKernel = stats.CPUStats.CPUUsage.UsageInKernelmode
-	defer func() { prevRead = stats.Read }()
 
-	if prevRead.IsZero() || totalDelta == 0.0 {
-		cpuPerc = 0
+	if totalDelta == 0.0 {
 		return 0.0
 	}
 
-	cpuPerc = float64(userDelta+kernelDelta) / float64(totalDelta) * 100.0 * float64(stats.CPUStats.OnlineCPUs)
-	return cpuPerc
-}
-
-var (
-	tickCountF   = tc.TickCount
-	prevTickCnt  = tickCountF()
-	cyclesTotal  = 0.0
-)
-
-func calcProcCycles(stats *container.StatsResponse) float64 {
-	currTickCnt := tickCountF()
-	delta := currTickCnt - prevTickCnt
-	prevTickCnt = currTickCnt
-
-	cyclesTotal += calcCpuPerc(stats) * float64(delta) / 100
-	return cyclesTotal
+	return float64(userDelta+kernelDelta) / float64(totalDelta) * 100.0
 }
 
 func calcNetIO(stats *container.StatsResponse) (float64, float64) {

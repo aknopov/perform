@@ -122,36 +122,21 @@ func TestCalcNetIO(t *testing.T) {
 func TestCalcCpu(t *testing.T) {
 	assertT := assert.New(t)
 
-	prevRead = NO_TIME
+	defer mocker.ReplaceItem(&prevTotal, 0)
+	defer mocker.ReplaceItem(&prevUser, 0)
+	defer mocker.ReplaceItem(&prevKernel, 0)
 
-	// The first call yields zero
+	assertT.EqualValues(21, calcCpuPerc(&stats1))
+	// Returns 0, since "totalDelta" didn't change
 	assertT.Zero(calcCpuPerc(&stats1))
-	// The second uses deltas and CPU count
-	assertT.EqualValues(55, calcCpuPerc(&stats2))
-}
-
-func TestCalcProcCycles(t *testing.T) {
-	assertT := assert.New(t)
-
-	ticks := []uint64{1000000, 2000000}
-	pass := 0
-	mockTickCountF := func() uint64 { pass++; return ticks[pass-1] }
-	defer mocker.ReplaceItem(&tickCountF, mockTickCountF)()
-	defer mocker.ReplaceItem(&prevTickCnt, 0)()
-	defer mocker.ReplaceItem(&prevRead, NO_TIME)()
-
-	// The first call yields zero
-	assertT.Zero(calcProcCycles(&stats1))
-	assertT.EqualValues(550000, calcProcCycles(&stats2))
 }
 
 func TestGetValue(t *testing.T) {
 	assertT := assert.New(t)
 
-	prevTotal = 0
-	prevUser = 0
-	prevKernel = 0
-	prevRead = NO_TIME
+	defer mocker.ReplaceItem(&prevTotal, 0)
+	defer mocker.ReplaceItem(&prevUser, 0)
+	defer mocker.ReplaceItem(&prevKernel, 0)
 
 	assertT.EqualValues(5, getValue(&dockerInfo, &stats1, param.CPUs))
 	assertT.EqualValues(12, getValue(&dockerInfo, &stats1, param.PIDs))
@@ -163,12 +148,11 @@ func TestGetValue(t *testing.T) {
 	getValue(&dockerInfo, &stats1, param.Tx)
 	assertT.EqualValues(522, getValue(&dockerInfo, &stats2, param.Tx))
 	getValue(&dockerInfo, &stats1, param.CpuPerc)
-	assertT.EqualValues(55, getValue(&dockerInfo, &stats2, param.CpuPerc))
+	assertT.EqualValues(21, getValue(&dockerInfo, &stats2, param.CpuPerc))
+	assertT.NotZero(getValue(&dockerInfo, &stats2, param.Cyc))
 
-	assertT.Panics(func() { getValue(&dockerInfo, &stats1, param.Tx+100) })
+	assertT.Panics(func() { getValue(&dockerInfo, &stats1, param.Cyc+100) })
 }
-
-// https://vektra.github.io/mockery/latest/#why-mockery
 
 func TestGetContainerInfo(t *testing.T) {
 	assertT := assert.New(t)
