@@ -7,13 +7,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/aknopov/fancylogger"
 	"github.com/aknopov/perform"
 	"github.com/gin-gonic/gin"
 )
 
 var (
-	logger   = fancylogger.NewLogger(os.Stderr, fancylogger.LiteFg)
 	stopChan = make(chan struct{}, 1)
 )
 
@@ -46,9 +44,13 @@ func hashPassword4Gin(ctx *gin.Context, minDelay, maxDelay int) {
 
 	hashCode := hashStr(request)
 
-	// Sleep random number of milliseconds
-	if maxDelay > minDelay {
-		time.Sleep(time.Duration(minDelay+rand.Intn(maxDelay-minDelay)) * time.Millisecond)
+	// Sleep random number of milliseconds if required
+	if maxDelay > 0 {
+		msecs := minDelay
+		if maxDelay > minDelay {
+			msecs = rand.Intn(maxDelay - minDelay)
+		}
+		time.Sleep(time.Duration(msecs) * time.Millisecond)
 	}
 
 	ctx.JSON(http.StatusOK, HashResponse{hashCode})

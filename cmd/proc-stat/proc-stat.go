@@ -90,7 +90,7 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 		ts := perform.AssumeOnErr(proc.Times, NO_TIMESTAT)
 		return ts.User + ts.System // Also: Total()
 	case pm.CpuPerc:
-		return calcPercent(proc)
+		return calcCpuPerc(proc)
 	case pm.Mem:
 		memInfo := perform.AssumeOnErr(proc.MemoryInfo, NO_MEMSTAT)
 		return float64(memInfo.RSS) / 1024
@@ -128,11 +128,11 @@ func getProcCycles(proc pm.IQProcess) float64 {
 	currTickCnt := tickCountF()
 	delta := currTickCnt - prevTickCnt
 	prevTickCnt = currTickCnt
-	cyclesTotal += calcPercent(proc) * float64(delta) / 100
+	cyclesTotal += calcCpuPerc(proc) * float64(delta) / 100
 	return cyclesTotal
 }
 
-func calcPercent(proc pm.IQProcess) float64 {
+func calcCpuPerc(proc pm.IQProcess) float64 {
 	if time.Since(lastCpuTime) > 10*time.Millisecond {
 		cpuPercent = perform.AssumeOnErr(reduceArg(proc.Percent, 0), 0)
 		lastCpuTime = time.Now()
