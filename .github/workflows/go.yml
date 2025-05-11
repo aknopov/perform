@@ -26,8 +26,14 @@ jobs:
         with:
           go-version: '1.23.x'
 
+      - name: Install mockery
+        run: go install github.com/vektra/mockery/v3@v3.2.2
+
       - name: Install dependencies
         run: go mod download
+
+      - name: Create mocks
+        run: mockery
 
       - name: Lint the code
         run: go vet ./...
