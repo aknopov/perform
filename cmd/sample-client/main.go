@@ -21,29 +21,29 @@ const (
 	WaitSleep = 1 * time.Second
 )
 
-type HashRequest struct {
-	Password string `json:"password"`
-	Strength int    `json:"strength"`
+type SumRequest struct {
+	Length int `json:"length"`
 }
 
-type HashResponse struct {
-	Hash string `json:"hash"`
+type SumResponse struct {
+	Sum string `json:"sum"`
 }
 
 var (
 	logger  = fancylogger.NewLogger(os.Stdout, fancylogger.LiteFg)
-	quitReq = perform.AssertNoErr(json.Marshal(HashRequest{"quit", 0}))
+	quitReq = perform.AssertNoErr(json.Marshal(SumRequest{-1}))
 )
 
 func main() {
 
-	strength := flag.Int("s", 8, "encryption passes")
+	length := flag.Int("l", 10000, "series length")
 	concur := flag.Int("c", 10, "concurrent tasks")
 	totalTests := flag.Int("n", 500, "total tasks")
+	printRaw := flag.Bool("p", false, "print raw durations")
 	flag.Parse()
 
 	requestUrl := fmt.Sprintf("http://%s:%d", Host, Port)
-	pwdReq := HashRequest{"A secret", *strength}
+	pwdReq := SumRequest{*length}
 	jsonString := perform.AssertNoErr(json.Marshal(pwdReq))
 	task := func() error { return sendOneRequest(requestUrl, jsonString) }
 
@@ -56,7 +56,7 @@ func main() {
 	//nolint:errcheck
 	sendOneRequest(requestUrl, []byte(quitReq))
 
-	logger.Info().Msgf("Test finished for the factor %d:", pwdReq.Strength)
+	logger.Info().Msgf("Test finished for the length %d:", pwdReq.Length)
 	logger.Info().Int("  num tests", stats[0].Count).Send()
 	logger.Info().Int("  num concur", *concur).Send()
 	logger.Info().Int("  num failures", stats[0].Fails).Send()
@@ -67,6 +67,17 @@ func main() {
 	logger.Info().Dur("  min (ms)", stats[0].MinTime).Send()
 	logger.Info().Dur("  avg (ms)", stats[0].AvgTime).Send()
 	logger.Info().Dur("  stdev (ms)", stats[0].StdDev).Send()
+
+	if *printRaw {
+		fmt.Printf("        Raw test durations (ms):\n")
+		for i := range *totalTests {
+			fmt.Printf("%4d\t%.4f\n", i+1, toMillis(stats[0].Values[i]))
+		}
+	}
+}
+
+func toMillis(d time.Duration) float64 {
+	return float64(d.Nanoseconds()/100) / 10000
 }
 
 func sendOneRequest(url string, jsonString []byte) error {
@@ -87,7 +98,7 @@ func sendOneRequest(url string, jsonString []byte) error {
 		return err
 	}
 
-	var hashResp HashResponse
+	var hashResp SumResponse
 	err = json.Unmarshal(hashRaw, &hashResp)
 	if err != nil {
 		return err

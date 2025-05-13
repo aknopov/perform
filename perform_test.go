@@ -83,6 +83,7 @@ func TestCalcStats(t *testing.T) {
 	assertT.Equal(time.Duration(9000000), oneStat.MaxTime)
 	assertT.Equal(time.Duration(3027650), oneStat.StdDev)
 	assertT.Equal(3, oneStat.Fails)
+	assertT.Equal(aFixture.runtimes, oneStat.Values)
 }
 
 func TestRunTest(t *testing.T) {
