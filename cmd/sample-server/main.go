@@ -7,13 +7,12 @@ import (
 	"github.com/aknopov/fancylogger"
 )
 
-type HashRequest struct {
-	Password string `json:"password"`
-	Strength int    `json:"strength"`
+type SumRequest struct {
+	Length int `json:"length"`
 }
 
-type HashResponse struct {
-	Hash string `json:"hash"`
+type SumResponse struct {
+	Sum string `json:"sum"`
 }
 
 const (

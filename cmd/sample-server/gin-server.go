@@ -21,7 +21,7 @@ func startGin(port, minDelay, maxDelay int) {
 	engine := gin.New()
 	engine.Use(gin.Recovery()) // no debug logging
 	perform.AssertNoErr(perform.ND, engine.SetTrustedProxies(nil))
-	engine.POST("/", func(ctx *gin.Context) { hashPassword4Gin(ctx, minDelay, maxDelay) })
+	engine.POST("/", func(ctx *gin.Context) { calcSum4Gin(ctx, minDelay, maxDelay) })
 
 	logger.Info().Msg("-- Starting server...")
 	go func() { perform.AssertNoErr(perform.ND, engine.Run(fmt.Sprintf(":%d", port))) }()
@@ -30,19 +30,19 @@ func startGin(port, minDelay, maxDelay int) {
 	os.Exit(0)
 }
 
-func hashPassword4Gin(ctx *gin.Context, minDelay, maxDelay int) {
-	request := new(HashRequest)
+func calcSum4Gin(ctx *gin.Context, minDelay, maxDelay int) {
+	request := new(SumRequest)
 
 	perform.AssertNoErr(perform.ND, ctx.BindJSON(&request))
 
-	if request.Password == "quit" {
+	if request.Length == -1 {
 		logger.Info().Msg("-- Stopping server...")
-		ctx.JSON(http.StatusOK, HashResponse{"done"})
+		ctx.JSON(http.StatusOK, SumResponse{"done"})
 		stopChan <- perform.ND
 		return
 	}
 
-	hashCode := hashStr(request)
+	sumVal := calcSum(request.Length).String()
 
 	// Sleep random number of milliseconds if required
 	if maxDelay > 0 {
@@ -53,5 +53,5 @@ func hashPassword4Gin(ctx *gin.Context, minDelay, maxDelay int) {
 		time.Sleep(time.Duration(msecs) * time.Millisecond)
 	}
 
-	ctx.JSON(http.StatusOK, HashResponse{hashCode})
+	ctx.JSON(http.StatusOK, SumResponse{sumVal})
 }
