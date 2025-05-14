@@ -1,47 +1,65 @@
 # Problem Setup
 
-Existing tools like GoLang benchmark tests provide real-time latency of the tested code. This might be a good in CPU-bound application.
-However, in real life services that depend on disk I/O or networks this doesn't work well. Execution time might vary significantly depending on external factors.
-CPU profiling is not reliable even when performance tests run in controlled environment.
-Consider situation when you want to evaluate change in service performance after adding/removing some features. 
-Add on top the situation when extracing code is not feasible or too costly.
-How to measure performance change?
+Consider a scenario where you need to evaluate the performance impact of a code change in a service. When isolating the code for testing is impractical or requires extensive refactoring, integration testing becomes the only viable option. Typically, the service under test depends on other services. During periods of waiting for responses, the service does not utilize the CPU, which can skew statistics of response latencies (e.g., results of Go benchmarking or Gatling for Java). 
 
-## Performance Test Setup
+The goal of this project is to identify common metrics available across most operating systems and CPU architectures that can provide meaningful performance insights and be integrated into a CI/CD pipeline.
 
+The initial candidates for these metrics include:
+- Cumulative CPU time of the process, similar to the output of `top -b -d1 -p $pid` on Linux.
+- The sum of CPU% values for the process (i.e., integral over time), which is particularly useful for Docker containers.
+- The count of CPU cycles or instructions, obtainable on Linux using the `perf stat ...` command.
 
-## Performance Test Requirements
-1. The test should apply significan and sustainable load on the application. 
-1. Test should be reproducible before and after feature change. Most likely that means that test set should not change.
-1. The tests should be lengthy so that "warm-up" period can be neglected
+However, measurements on actual services revealed statistical errors in all the above metrics. Since CI/CD pipelines typically run tests only once, this brings us back to using response latencies. The proposed solution is to leverage t-test statistics of response latencies before and after the code change (refer to https://pkg.go.dev/golang.org/x/perf/cmd/benchstat). Final decision whether to use cumulative values od application performance or latencies statistics depends on the nature of the service and its eco system.
 
-## Example of use
+## Test Setup
 
-This repository contains two extra application - "sample-server" and "sample-client".
+The main entry point for performance testing is the `RunTest` method. It takes the following arguments:
+- A list of tasks to run (e.g., REST requests to an external server) - `tasks`
+- The total number of tests to run - `totalRuns`
+- The number of tests to run in parallel - `concurrent`
 
-The server hashes sent password with ARGON2 algorithm and sends the hash back. The request also contains extra parameters for number of iterations of the algorithm, thus allowing to control stress on the server.
+The function ensures a constant number of concurrent tests to maintain an even load. It returns separate statistics for each task, including:
+- Invocation count
+- Fail count
+- Average, median, minimum, and maximum values
+- Standard deviation
+- Raw values of response latencies
 
-The client sends the same request to the server in parallel using "perform" API. Upon completion client prints statistics number of tests, concurrency and reponses latency statistics.
+Separating statistics is done to allow extending the set of tasks as the service evolves.
 
-These values to evaluate performance, however, as was discussed in the "Problem Setup", more reliable performance parameter is total CPU time.
+## Sample Applications
 
-### Host Machine
+The project includes:
+- A [sample server](./cmd/sample-server), whose performance is measured.
+- A [sample client](./cmd/sample-client) that demonstrates the use of the `RunTest` function with a single task.
 
-If the server is run directly on a host machine it can be obtained wih `top` command - 
-```
-$ go build -C sample-server -o ../server.prog
-$ ./server.prog &
-$ pid=$(ps -C server.prog -o pid=)
-$ top -b -d1 -p $pid | grep --line-buffered $pid | tee server.log
-```
-The output looks like 
-```
-...
-13838 user     20   0 2746296   1.3g   7268 R  1999   8.7  33:50.01 server.pr+
-```
-and the key value is in the second column from the right on the last line. It shows that total CPU time (User + Kernel) across all 20 processors is 33 min 50 sec.
+The server performs calculations for the Flint-Hill Series with 128-bit precision.
 
+## Additional Utilities
 
-### Docker
+The project provides two similar utilities for measuring performance metrics:
+- [proc-stat](./cmd/proc-stat): for native applications
+- [docker-stat](./cmd/docker-stat): for Docker containers
 
-The server could be run in a Docker container. Unfortunately `docker stats` command does not provide cumulative CPU times - only CPU% that requires to sum up the column values to get performance metric.
+These utilities produce uniform output similar to `top -b -d1 -p $pid` on Linux or `docker stats $cid`. Both utilities continue measuring until the process or Docker container exits. The measurement frequency is controlled by the `-refresh` command-line parameter, which supports fractional values of a second.
+
+Metrics are specified using the `-params` command-line option. For example:  
+`./proc-stat -params=CPU,PIDs,Cyc`
+
+Available parameters include:
+- `Cpu`: CPU time spent by the process.
+- `CpuPerc`: Percentage of CPU time used by all cores to run the process (up to 100%).
+- `Mem`: Amount of committed RAM for the process.
+- `PIDs`: Number of process threads (lightweight processes).
+- `CPUs`: Number of host processor cores available to the process.
+- `Rx`: Total network read bytes.
+- `Tx`: Total network write bytes.
+- `Cyc`: Total CPU cycles spent by the process (proportional to `CpuPerc`).
+
+## Performance Test Tips
+
+1. The test should apply significant and sustainable load on the application. Control it with number of concurrent tests.
+1. Number of tests should be large enough to minimize the impact of the "warm-up" period.
+1. Docker allows control over system resources (memory and CPU) used by a container. However, CPU time measurements can be skewed.
+
+TODO: Implement serialization and parsing of `RunTest` output. Implement a separate application that provides t-test results similar to "benchstat".
