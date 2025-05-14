@@ -2,10 +2,11 @@ package perform
 
 import (
 	"math"
-	"math/big"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/ericlagergren/decimal"
 )
 
 // Statistics for running one task
@@ -18,6 +19,7 @@ type RunStats struct {
 	MedTime   time.Duration
 	StdDev    time.Duration
 	Fails     int
+	Values    []time.Duration
 }
 
 // Generic test task
@@ -38,9 +40,12 @@ var ND = struct{}{}
 // Runs concurrently several tasks
 //
 //   - tasks - tasks to run
+//
 //   - totalRuns - total number of tasks to run (> len(tasks))
+//
 //   - concurrent - number of concurrent tasks (< totalRuns)
-//   - return time statistics for each task
+//
+//     return time statistics for each task
 func RunTest(tasks []TestTask, totalRuns int, concurrent int) []RunStats {
 	waitGroup := new(sync.WaitGroup)
 	sema := make(chan struct{}, concurrent)
@@ -90,17 +95,19 @@ func runOneTask(fixture *taskFixture) {
 func calcStats(fixtures []*taskFixture) []RunStats {
 	ret := make([]RunStats, 0)
 
+	precCtx := decimal.Context128
 	for _, fixture := range fixtures {
 		sorttimes := make([]time.Duration, len(fixture.runtimes))
 		copy(sorttimes, fixture.runtimes)
 		sort.Slice(sorttimes, func(i, j int) bool { return sorttimes[i] < sorttimes[j] })
 
-		var sum = new(big.Float)
-		var sum2 = new(big.Float)
+		sum := new(decimal.Big)
+		sum2 := new(decimal.Big)
+		bigT := new(decimal.Big)
 		for _, t := range sorttimes {
-			bigT := big.NewFloat(float64(t))
-			sum = sum.Add(sum, bigT)
-			sum2 = sum2.Add(sum2, bigT.Mul(bigT, bigT))
+			bigT.SetUint64(uint64(t))
+			precCtx.Add(sum, sum, bigT)
+			precCtx.Add(sum2, sum2, bigT.Mul(bigT, bigT))
 		}
 
 		testCount := len(sorttimes)
@@ -116,12 +123,14 @@ func calcStats(fixtures []*taskFixture) []RunStats {
 
 		testStats.Fails = fixture.fails
 
+		testStats.Values = fixture.runtimes
+
 		ret = append(ret, testStats)
 	}
 	return ret
 }
 
-func big2float(val *big.Float) float64 {
+func big2float(val *decimal.Big) float64 {
 	conv, _ := val.Float64()
 	return conv
 }

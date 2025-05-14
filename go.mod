@@ -7,10 +7,8 @@ toolchain go1.23.3
 require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/mitchellh/go-ps v1.0.0
-	github.com/opencontainers/image-spec v1.1.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.37.0
 )
 
 require (
@@ -46,6 +44,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
@@ -62,6 +61,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
+	golang.org/x/crypto v0.37.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
@@ -74,10 +74,7 @@ require (
 	github.com/aknopov/fancylogger v0.0.5
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/docker v28.1.1+incompatible
-	github.com/dterei/gotsc v0.0.0-20160722215413-e78f872945c6
+	github.com/ericlagergren/decimal v0.0.0-20240411145413-00de7ca16731
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/tklauser/go-sysconf v0.3.15 // indirect
-	github.com/tklauser/numcpus v0.10.0 // indirect
-	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

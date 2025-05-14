@@ -151,7 +151,7 @@ Usage: docker-stat -refresh=... -params=... containerId
   containerId - container name or ID
 -refresh - interval in seconds (default 1.0 sec)
 -params - comma separated list of
-  Cpu - total CPU time (msec) spent on runing container
+  Cpu - total CPU time (msec) spent on running container
   CpuPerc - percentage of the host's CPU usage
   Mem - container memory usage (KB)
   PIDs - number of container threads
