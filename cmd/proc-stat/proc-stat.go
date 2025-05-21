@@ -14,15 +14,14 @@ import (
 	pm "github.com/aknopov/perform/cmd/param"
 
 	ps "github.com/mitchellh/go-ps"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/net"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/net"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 var (
 	NO_TIMESTAT = &cpu.TimesStat{}
 	NO_MEMSTAT  = &process.MemoryInfoStat{}
-	NO_NET_IO   = []net.IOCountersStat{}
 )
 
 // Function substitutions for unit tests
@@ -60,7 +59,7 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 
 	getProcNetFn := reduceArg(proc.NetIOCounters, false)
 	queryNet := slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx)
-	netInfo := NO_NET_IO
+	netInfo := pm.NO_NET_IO
 
 	ticker := time.NewTicker(refreshPeriod)
 	values := make([]float64, len(paramList))
@@ -71,7 +70,7 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 		}
 
 		if queryNet {
-			netInfo = perform.AssumeOnErr(getProcNetFn, NO_NET_IO)
+			netInfo = perform.AssumeOnErr(getProcNetFn, pm.NO_NET_IO)
 		}
 
 		for i, p := range paramList {

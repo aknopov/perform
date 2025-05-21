@@ -11,9 +11,9 @@ import (
 	pm "github.com/aknopov/perform/cmd/param"
 	"github.com/aknopov/perform/mocker"
 	ps "github.com/mitchellh/go-ps"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/net"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/net"
+	"github.com/shirou/gopsutil/v4/process"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -201,8 +201,8 @@ func TestGetValueRecovery(t *testing.T) {
 	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Cpu))
 	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Mem))
 	assertT.EqualValues(-1, getValue(qProc, testNetIO, pm.PIDs))
-	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Tx))
-	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Rx))
+	assertT.EqualValues(0, getValue(qProc, pm.NO_NET_IO, pm.Tx))
+	assertT.EqualValues(0, getValue(qProc, pm.NO_NET_IO, pm.Rx))
 }
 
 func TestUsage(t *testing.T) {
