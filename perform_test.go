@@ -148,6 +148,7 @@ func TestCalcPvals(t *testing.T) {
 
 	stat2.Count = 1
 	_, err = CalcPvals([]RunStats{stat1}, []RunStats{stat2})
+	assertT.ErrorContains(err, "invalid statistics data in test #0")
 	assertT.ErrorContains(err, "sample is too small")
 	
 	stats1 := []RunStats{RunStats{}}

@@ -38,50 +38,46 @@ func check(t *testing.T, want, got *TTestResult) {
 	}
 }
 
-func check3(t *testing.T, test func(alt LocationHypothesis) (*TTestResult, error), n1, n2 int, tval, dof float64, pless, pdiff, pgreater float64) {
-	t.Helper()
-	want := &TTestResult{N1: n1, N2: n2, T: tval, DoF: dof}
-
-	want.AltHypothesis = LocationLess
-	want.P = pless
-	got, _ := test(want.AltHypothesis)
-	check(t, want, got)
-
-	want.AltHypothesis = LocationDiffers
-	want.P = pdiff
-	got, _ = test(want.AltHypothesis)
-	check(t, want, got)
-
-	want.AltHypothesis = LocationGreater
-	want.P = pgreater
-	got, _ = test(want.AltHypothesis)
-	check(t, want, got)
+type testData[X any] struct {
+	fun       func(x1, x2 X, alt LocationHypothesis) (*TTestResult, error)
+	x1, x2    X
+	n1, n2    int
+	tval, dof float64
+	alt       LocationHypothesis
+	p         float64
 }
 
 func TestTTest(t *testing.T) {
+	unpairedData := []testData[tTestSample]{
+		{TwoSampleTTest, s1, s1, 4, 4, 0, 6, LocationLess, 0.5},
+		{TwoSampleTTest, s1, s1, 4, 4, 0, 6, LocationDiffers, 1.0},
+		{TwoSampleTTest, s1, s1, 4, 4, 0, 6, LocationGreater, 0.5},
+		{TwoSampleTTest, s1, s2, 4, 4, -3.9703446152237674, 6, LocationLess, 0.0036820296121056195},
+		{TwoSampleTTest, s1, s2, 4, 4, -3.9703446152237674, 6, LocationDiffers, 0.0073640592242113214},
+		{TwoSampleTTest, s1, s2, 4, 4, -3.9703446152237674, 6, LocationGreater, 0.9963179703878944},
+		{TwoSampleWelchTTest, s1, s1, 4, 4, 0, 6, LocationLess, 0.5},
+		{TwoSampleWelchTTest, s1, s1, 4, 4, 0, 6, LocationDiffers, 1.0},
+		{TwoSampleWelchTTest, s1, s1, 4, 4, 0, 6, LocationGreater, 0.5},
+		{TwoSampleWelchTTest, s1, s2, 4, 4, -3.9703446152237674, 5.584615384615385, LocationLess, 0.004256431565689112},
+		{TwoSampleWelchTTest, s1, s2, 4, 4, -3.9703446152237674, 5.584615384615385, LocationDiffers, 0.0085128631313781695},
+		{TwoSampleWelchTTest, s1, s2, 4, 4, -3.9703446152237674, 5.584615384615385, LocationGreater, 0.9957435684343109},
+	}
+	for _, d := range unpairedData {
+		want := &TTestResult{N1: d.n1, N2: d.n2, T: d.tval, DoF: d.dof, AltHypothesis: d.alt, P: d.p}
+		got, _ := d.fun(d.x1, d.x2, d.alt)
+		check(t, want, got)
+	}
 
-	check3(t, func(alt LocationHypothesis) (*TTestResult, error) {
-		return TwoSampleTTest(s1, s1, alt)
-	}, 4, 4, 0, 6,
-		0.5, 1, 0.5)
-	check3(t, func(alt LocationHypothesis) (*TTestResult, error) {
-		return TwoSampleWelchTTest(s1, s1, alt)
-	}, 4, 4, 0, 6,
-		0.5, 1, 0.5)
-
-	check3(t, func(alt LocationHypothesis) (*TTestResult, error) {
-		return TwoSampleTTest(s1, s2, alt)
-	}, 4, 4, -3.9703446152237674, 6,
-		0.0036820296121056195, 0.0073640592242113214, 0.9963179703878944)
-	check3(t, func(alt LocationHypothesis) (*TTestResult, error) {
-		return TwoSampleWelchTTest(s1, s2, alt)
-	}, 4, 4, -3.9703446152237674, 5.584615384615385,
-		0.004256431565689112, 0.0085128631313781695, 0.9957435684343109)
-
-	check3(t, func(alt LocationHypothesis) (*TTestResult, error) {
-		return PairedTTest(vals1, vals2, alt)
-	}, 4, 4, -17, 3,
-		0.0002216717691559955, 0.00044334353831207749, 0.999778328230844)
+	pairedData := []testData[[]float64]{
+		{PairedTTest, vals1, vals2, 4, 4, -17, 3, LocationLess, 0.0002216717691559955},
+		{PairedTTest, vals1, vals2, 4, 4, -17, 3, LocationDiffers, 0.00044334353831207749},
+		{PairedTTest, vals1, vals2, 4, 4, -17, 3, LocationGreater, 0.999778328230844},
+	}
+	for _, d := range pairedData {
+		want := &TTestResult{N1: d.n1, N2: d.n2, T: d.tval, DoF: d.dof, AltHypothesis: d.alt, P: d.p}
+		got, _ := d.fun(d.x1, d.x2, d.alt)
+		check(t, want, got)
+	}
 }
 
 func TestFailures(t *testing.T) {
@@ -101,6 +97,7 @@ func TestFailures(t *testing.T) {
 	ae(t, func() (*TTestResult, error) { return PairedTTest(vals1, vals3, LocationDiffers) }, "samples have different lengths")
 	ae(t, func() (*TTestResult, error) { return PairedTTest(vals3, vals1, LocationDiffers) }, "samples have different lengths")
 	ae(t, func() (*TTestResult, error) { return PairedTTest(vals3, vals3, LocationDiffers) }, "sample is too small")
+	ae(t, func() (*TTestResult, error) { return PairedTTest(vals1, vals1, LocationDiffers) }, "sample has zero variance")
 }
 
 func BenchmarkTwoSampleTTest(b *testing.B) {
