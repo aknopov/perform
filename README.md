@@ -28,7 +28,7 @@ The function ensures a constant number of concurrent tests to maintain an even l
 Separating statistics is done to allow extending the set of tasks as the service evolves.
 
 ### Statistical analysis
-The library provides `CalcPvals` function to compare results of two test runs, It calculates probability that latencies in the second run are are greater  than in the first for each test using "t-test" statistics. `RunStats` structure is annotated to ease [de-]serialization to JSON or YAML.
+The library provides `CalcPvals` function to compare results of two test runs, It calculates probability that latencies in the second run are greater  than in the first for each test using "t-test" statistics. `RunStats` structure is annotated to ease [de-]serialization to JSON or YAML.
 
 ## Sample Applications
 

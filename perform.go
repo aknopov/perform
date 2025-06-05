@@ -84,7 +84,7 @@ func CalcPvals(stats1, stats2 []RunStats) ([]float64, error) {
 
 		tRes, err := TwoSampleTTest(tSample1, tSample2, LocationGreater)
 		if err != nil {
-			return nil, fmt.Errorf("invalid statistics data in sample %d: %v", i, err)
+			return nil, fmt.Errorf("invalid statistics data in test #%d: %v", i, err)
 		}
 
 		pVals = append(pVals, tRes.P)

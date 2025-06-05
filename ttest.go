@@ -51,9 +51,9 @@ type TTestResult struct {
 	P float64
 }
 
-// A TDist is a Student's t-distribution with V degrees of freedom.
-type TDist struct {
-	V float64
+// A tDist is a Student's t-distribution with V degrees of freedom.
+type tDist struct {
+	v float64
 }
 
 // A TTestSample is a sample that can be used for a one or two sample t-test.
@@ -69,14 +69,14 @@ var (
 	ErrMismatchedSamples = errors.New("samples have different lengths")
 )
 
-func (t TDist) CDF(x float64) float64 {
+func (t tDist) cdf(x float64) float64 {
 	switch {
 	case x == 0:
 		return 0.5
 	case x > 0:
-		return 1 - 0.5*mathBetaInc(t.V/(t.V+x*x), t.V/2, 0.5)
+		return 1 - 0.5*mathBetaInc(t.v/(t.v+x*x), t.v/2, 0.5)
 	case x < 0:
-		return 1 - t.CDF(-x)
+		return 1 - t.cdf(-x)
 	default:
 		return math.NaN()
 	}
@@ -87,15 +87,15 @@ func timeStat2Tstat(rs RunStats) tTestSample {
 }
 
 func newTTestResult(n1, n2 int, t, dof float64, alt LocationHypothesis) *TTestResult {
-	dist := TDist{dof}
+	dist := tDist{dof}
 	var p float64
 	switch alt {
 	case LocationDiffers:
-		p = 2 * (1 - dist.CDF(math.Abs(t)))
+		p = 2 * (1 - dist.cdf(math.Abs(t)))
 	case LocationLess:
-		p = dist.CDF(t)
+		p = dist.cdf(t)
 	case LocationGreater:
-		p = 1 - dist.CDF(t)
+		p = 1 - dist.cdf(t)
 	}
 	return &TTestResult{N1: n1, N2: n2, T: t, DoF: dof, AltHypothesis: alt, P: p}
 }
