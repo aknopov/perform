@@ -1,6 +1,8 @@
 package perform
 
 import (
+	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"sync"
@@ -11,15 +13,15 @@ import (
 
 // Statistics for running one task
 type RunStats struct {
-	Count     int
-	TotalTime time.Duration
-	AvgTime   time.Duration
-	MinTime   time.Duration
-	MaxTime   time.Duration
-	MedTime   time.Duration
-	StdDev    time.Duration
-	Fails     int
-	Values    []time.Duration
+	Count     int             `json,yaml:"count"`
+	TotalTime time.Duration   `json,yaml:"sum_time"`
+	AvgTime   time.Duration   `json,yaml:"avg_time"`
+	MinTime   time.Duration   `json,yaml:"min_time"`
+	MaxTime   time.Duration   `json,yaml:"max_time"`
+	MedTime   time.Duration   `json,yaml:"med_time"`
+	StdDev    time.Duration   `json,yaml:"stdev_time"`
+	Fails     int             `json,yaml:"fails"`
+	Values    []time.Duration `json,yaml:"times"`
 }
 
 // Generic test task
@@ -63,6 +65,32 @@ func RunTest(tasks []TestTask, totalRuns int, concurrent int) []RunStats {
 	waitGroup.Wait()
 
 	return calcStats(fixtures)
+}
+
+// Compares two series of tests and calculates probabilities that latencies in the second series
+// are larger using t-test statistics.
+//
+// Statistics "stat1" and "stats2" should have same number od tests; run counts in test pairs are not required to be equal,
+// but they should be larger than 1.
+func CalcPvals(stats1, stats2 []RunStats) ([]float64, error) {
+	if len(stats1) != len(stats2) {
+		return nil, errors.New("different size of tasks")
+	}
+
+	pVals := make([]float64, 0, len(stats1))
+	for i := range stats1 {
+		tSample1 := timeStat2Tstat(stats1[i])
+		tSample2 := timeStat2Tstat(stats2[i])
+
+		tRes, err := TwoSampleTTest(tSample1, tSample2, LocationGreater)
+		if err != nil {
+			return nil, fmt.Errorf("invalid statistics data in test #%d: %v", i, err)
+		}
+
+		pVals = append(pVals, tRes.P)
+	}
+
+	return pVals, nil
 }
 
 func createFixture(task TestTask, sema *chan struct{}, waitGroup *sync.WaitGroup) *taskFixture {
