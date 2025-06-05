@@ -7,8 +7,6 @@ import (
 	"github.com/ericlagergren/decimal"
 )
 
-// UC
-
 func TestSum(t *testing.T) {
 	fmt.Printf("%s\n", calcSum(10000))
 	fmt.Printf("%s\n", calcSum(20000))

@@ -119,3 +119,40 @@ func TestAssumeOnErr(t *testing.T) {
 	assertT.Equal(1, AssumeOnErr(func() (int, error) { return 1, nil }, -1))
 	assertT.Equal(-1, AssumeOnErr(func() (int, error) { return 0, errTest }, -1))
 }
+
+var (
+	stat1 = RunStats{Count: 100,
+		TotalTime: 58530895500,
+		AvgTime:   563619080,
+		MinTime:   523003400,
+		MaxTime:   763448900,
+		MedTime:   566497100,
+		StdDev:    56361908,
+	}
+	stat2 = RunStats{Count: 200,
+		TotalTime: 31919888400,
+		AvgTime:   638293246,
+		MinTime:   617243500,
+		MaxTime:   694757900,
+		MedTime:   635208100,
+		StdDev:    12563879,
+	}
+)
+
+func TestCalcPvals(t *testing.T) {
+	assertT := assert.New(t)
+
+	probs, err := CalcPvals([]RunStats{stat1}, []RunStats{stat2})
+	assertT.NoError(err)
+	assertT.Equal(1.0, probs[0])
+
+	stat2.Count = 1
+	_, err = CalcPvals([]RunStats{stat1}, []RunStats{stat2})
+	assertT.ErrorContains(err, "invalid statistics data in test #0")
+	assertT.ErrorContains(err, "sample is too small")
+	
+	stats1 := []RunStats{RunStats{}}
+	stats2 := []RunStats{RunStats{}, RunStats{}}
+	_, err = CalcPvals(stats1, stats2)
+	assertT.ErrorContains(err, "different size of tasks")
+}

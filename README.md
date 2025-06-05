@@ -27,6 +27,9 @@ The function ensures a constant number of concurrent tests to maintain an even l
 
 Separating statistics is done to allow extending the set of tasks as the service evolves.
 
+### Statistical analysis
+The library provides `CalcPvals` function to compare results of two test runs, It calculates probability that latencies in the second run are greater  than in the first for each test using "t-test" statistics. `RunStats` structure is annotated to ease [de-]serialization to JSON or YAML.
+
 ## Sample Applications
 
 The project includes:
@@ -61,5 +64,3 @@ Available parameters include:
 1. The test should apply significant and sustainable load on the application. Control it with number of concurrent tests.
 1. Number of tests should be large enough to minimize the impact of the "warm-up" period.
 1. Docker allows control over system resources (memory and CPU) used by a container. However, CPU time measurements can be skewed.
-
-TODO: Implement serialization and parsing of `RunTest` output. Implement a separate application that provides t-test results similar to "benchstat".
