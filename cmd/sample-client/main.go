@@ -39,7 +39,7 @@ func main() {
 	length := flag.Int("l", 10000, "series length")
 	concur := flag.Int("c", 10, "concurrent tasks")
 	totalTests := flag.Int("n", 500, "total tasks")
-	printRaw := flag.Bool("p", false, "print raw durations")
+	printRaw := flag.Bool("r", false, "print raw durations")
 	flag.Parse()
 
 	requestUrl := fmt.Sprintf("http://%s:%d", Host, Port)
@@ -61,23 +61,18 @@ func main() {
 	logger.Info().Int("  num concur", *concur).Send()
 	logger.Info().Int("  num failures", stats[0].Fails).Send()
 	logger.Info().Dur("  duration (ms)", elapsedTime).Send()
-	logger.Info().Dur("  sum (ms)", stats[0].TotalTime).Send()
-	logger.Info().Dur("  max (ms)", stats[0].MaxTime).Send()
-	logger.Info().Dur("  med (ms)", stats[0].MedTime).Send()
-	logger.Info().Dur("  min (ms)", stats[0].MinTime).Send()
-	logger.Info().Dur("  avg (ms)", stats[0].AvgTime).Send()
-	logger.Info().Dur("  stdev (ms)", stats[0].StdDev).Send()
+	logger.Info().Float64("  max (ms)", stats[0].MaxTime).Send()
+	logger.Info().Float64("  med (ms)", stats[0].MedTime).Send()
+	logger.Info().Float64("  min (ms)", stats[0].MinTime).Send()
+	logger.Info().Float64("  avg (ms)", stats[0].AvgTime).Send()
+	logger.Info().Float64("  stdev (ms)", stats[0].StdDev).Send()
 
 	if *printRaw {
 		fmt.Printf("        Raw test durations (ms):\n")
 		for i := range *totalTests {
-			fmt.Printf("%4d\t%.4f\n", i+1, toMillis(stats[0].Values[i]))
+			fmt.Printf("%4d\t%.4f\n", i+1, stats[0].Values[i])
 		}
 	}
-}
-
-func toMillis(d time.Duration) float64 {
-	return float64(d.Nanoseconds()/100) / 10000
 }
 
 func sendOneRequest(url string, jsonString []byte) error {

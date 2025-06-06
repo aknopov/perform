@@ -84,7 +84,7 @@ func (t tDist) cdf(x float64) float64 {
 }
 
 func timeStat2Tstat(rs RunStats) tTestSample {
-	return tTestSample{weight: float64(rs.Count), mean: float64(rs.AvgTime), variance: float64(rs.StdDev) * float64(rs.StdDev)}
+	return tTestSample{weight: float64(rs.Count), mean: rs.AvgTime, variance: rs.StdDev * rs.StdDev}
 }
 
 func newTTestResult(n1, n2 int, t, dof float64, alt LocationHypothesis) *TTestResult {
