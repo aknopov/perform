@@ -40,13 +40,38 @@ func TestGetProcPid(t *testing.T) {
 	assertT.Equal(123, pid)
 }
 
+func TestGetProcIds(t *testing.T) {
+	assertT := assert.New(t)
+
+	mockProcess := NewMockPsProcess(t)
+	mockProcess.EXPECT().Pid().Return(123)
+	mockProcess.EXPECT().Executable().Return("prog")
+
+	testGetProcessList := func() ([]ps.Process, error) { return []ps.Process{mockProcess}, nil }
+	defer mocker.ReplaceItem(&getProcessList, testGetProcessList)()
+
+	pid, app := getProcIds("prog")
+	assertT.Equal(123, pid)
+	assertT.Equal("prog", app)
+	pid, app = getProcIds("123")
+	assertT.Equal(123, pid)
+	assertT.Equal("prog", app)
+
+	pid, app = getProcIds("321")
+	assertT.Equal(-1, pid)
+	assertT.Equal("", app)
+	pid, app = getProcIds("boo")
+	assertT.Equal(-1, pid)
+	assertT.Equal("", app)
+}
+
 func TestExitOnNoProcess(t *testing.T) {
 	assertT := assert.New(t)
 
 	// Testing exit code by starting external "go test""
 	testPid := os.Getenv("TEST_PID")
 	if testPid != "" {
-		getProcPid(testPid)
+		main()
 		return // just in case
 	}
 

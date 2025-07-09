@@ -157,6 +157,34 @@ func TestGetValue(t *testing.T) {
 func TestGetContainerInfo(t *testing.T) {
 	assertT := assert.New(t)
 
+	summary := container.Summary{ID: "ID", Names: []string{"name1"}, Image: "an_image"}
+
+	mockApiClient := NewMockContainerAPIClient(t)
+	mockApiClient.EXPECT().ContainerList(context.Background(), container.ListOptions{}).Return([]container.Summary{summary}, nil).Once()
+
+	refSummary, err := getContainerInfo(mockApiClient, "ID")
+	assertT.Nil(err)
+	assertT.Equal(&summary, refSummary)
+}
+
+func TestGetContainerInfoFailures(t *testing.T) {
+	assertT := assert.New(t)
+
+	summary := container.Summary{ID: "ID", Names: []string{"name1"}, Image: "an_image"}
+
+	mockApiClient := NewMockContainerAPIClient(t)
+	mockApiClient.EXPECT().ContainerList(context.Background(), container.ListOptions{}).Return(nil, errors.New("test")).Once()
+	mockApiClient.EXPECT().ContainerList(context.Background(), container.ListOptions{}).Return([]container.Summary{summary}, nil).Once()
+
+	_, err := getContainerInfo(mockApiClient, "ID")
+	assertT.Error(err)
+	_, err = getContainerInfo(mockApiClient, "foo")
+	assertT.Error(err)
+}
+
+func TestGetContainerStats(t *testing.T) {
+	assertT := assert.New(t)
+
 	mockReader := container.StatsResponseReader{
 		Body:   io.NopCloser(strings.NewReader(`{"Read": "2021-02-18T21:54:42Z"}`)),
 		OSType: "Linux",
@@ -164,20 +192,20 @@ func TestGetContainerInfo(t *testing.T) {
 	mockApiClient := NewMockContainerAPIClient(t)
 	mockApiClient.EXPECT().ContainerStatsOneShot(context.Background(), "ID").Return(mockReader, nil).Once()
 
-	stats, err := getContainerInfo(mockApiClient, "ID")
+	stats, err := getContainerStats(mockApiClient, "ID")
 	assertT.Nil(err)
 	readTime, _ := time.Parse("2006-01-02T15:04:05Z", "2021-02-18T21:54:42Z")
 	assertT.Equal(readTime, stats.Read)
 }
 
-func TestGetContainerInfoFailures(t *testing.T) {
+func TestGetContainerStatsFailures(t *testing.T) {
 	assertT := assert.New(t)
 
 	dockerErr := errors.New("Docker is dead")
 	mockApiClient := NewMockContainerAPIClient(t)
 	mockApiClient.EXPECT().ContainerStatsOneShot(context.Background(), "ID").Return(container.StatsResponseReader{}, dockerErr).Once()
 
-	_, err := getContainerInfo(mockApiClient, "ID")
+	_, err := getContainerStats(mockApiClient, "ID")
 	assertT.Equal(dockerErr, err)
 
 	mockReader := container.StatsResponseReader{
@@ -186,7 +214,7 @@ func TestGetContainerInfoFailures(t *testing.T) {
 	}
 	mockApiClient.EXPECT().ContainerStatsOneShot(context.Background(), "ID").Return(mockReader, nil).Once()
 
-	_, err = getContainerInfo(mockApiClient, "ID")
+	_, err = getContainerStats(mockApiClient, "ID")
 	assertT.IsType(&time.ParseError{}, err)
 }
 
