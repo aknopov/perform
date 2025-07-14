@@ -1,0 +1,190 @@
+package net
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/shirou/gopsutil/v4/net"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestSingleStartInvocation(t *testing.T) {
+	defer replaceGlobalVar(&procConnMap, nil)()
+
+	var errChan chan error
+
+	ctx, cancel1 := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	assert.NotPanics(t, func() { errChan = StartTracing(ctx, 1, time.Millisecond) })
+	cancel1()
+
+	ctx, cancel2 := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	assert.Panics(t, func() { errChan = StartTracing(ctx, 1, time.Millisecond) })
+	cancel2()
+
+	select {
+	case err := <-errChan:
+		if !strings.HasPrefix(err.Error(), "You don't have permission to capture on that device") {
+			t.Fatalf("No error expected - got %v", err)
+		}
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestGetProcConnMapCopy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	StartTracing(ctx, -1, 100*time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
+
+	procNetStatCpy := getProcConnMapCopy()
+	assert.NotEmpty(t, procNetStatCpy)
+
+	// check deep copy
+	for k, v := range procConnMap {
+		vCopy := procNetStatCpy[k]
+		assert.NotEqual(t, v.NetCounters, &vCopy.NetCounters)
+	}
+}
+
+func TestGetProcessNetIOCounters(t *testing.T) {
+	testTab := make(map[net.Addr]*procNetStat)
+	stat1 := IOCountersStat{Name: "if1", BytesSent: 111, BytesRecv: 222, PacketsSent: 3, PacketsRecv: 4}
+	stat2 := IOCountersStat{Name: "if2", BytesSent: 333, BytesRecv: 44, PacketsSent: 2, PacketsRecv: 2}
+	stat3 := IOCountersStat{Name: "if1", BytesSent: 444, BytesRecv: 57, PacketsSent: 5, PacketsRecv: 7}
+	testTab[net.Addr{IP: "192.168.0.235", Port: 20781}] = &procNetStat{Pid: 111, NetCounters: stat1}
+	testTab[net.Addr{IP: "127.0.0.1", Port: 22137}] = &procNetStat{Pid: 111, NetCounters: stat2}
+	testTab[net.Addr{IP: "192.168.0.235", Port: 20675}] = &procNetStat{Pid: 411, NetCounters: stat3}
+	defer replaceGlobalVar(&procConnMap, testTab)()
+	defer replaceGlobalVar(&pid, 111)()
+
+	counts, err := GetProcessNetIOCounters()
+	require.NoError(t, err)
+	assert.Len(t, counts, 1)
+	assert.EqualValues(t, 444, counts[0].BytesSent)
+	assert.EqualValues(t, 266, counts[0].BytesRecv)
+	assert.EqualValues(t, 5, counts[0].PacketsSent)
+	assert.EqualValues(t, 6, counts[0].PacketsRecv)
+	assert.Zero(t, counts[0].Errin)
+	assert.Zero(t, counts[0].Errout)
+
+	pid = 777
+	_, err = GetProcessNetIOCounters()
+	assert.Error(t, err)
+}
+
+// UC temp commented out, waiting for tracePackets
+// func TestErrorReporting(t *testing.T) {
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
+// 	defer replaceGlobalVar(&procConnMap, nil)()
+
+// 	errChan := StartTracing(ctx, 1, time.Millisecond)
+
+// 	err := <-errChan
+// 	assert.Error(t, err)
+// }
+
+var (
+	tIdx        = 0
+	addr1       = net.Addr{IP: "127.0.0.1", Port: 12345}
+	addr2       = net.Addr{IP: "127.0.0.1", Port: 12346}
+	addr3       = net.Addr{IP: "127.0.0.1", Port: 12347}
+	connections = [][]net.ConnectionStat{
+		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr2, Pid: 111}},
+		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr3, Pid: 111}},
+		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr3, Pid: 111}},
+	}
+)
+
+func mockConnections(_ context.Context, _ string) ([]net.ConnectionStat, error) {
+	ret := connections[tIdx]
+	tIdx++
+	return ret, nil
+}
+
+func TestConnMapRefresh(t *testing.T) {
+	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
+	expire := 20 * time.Millisecond
+
+	assert.Empty(t, procConnMap)
+
+	updateTable(context.Background(), 111, mockConnections, expire)
+	assert.Len(t, procConnMap, 2)
+	assert.Contains(t, procConnMap, addr1)
+	assert.Contains(t, procConnMap, addr2)
+	assert.NotContains(t, procConnMap, addr3)
+
+	updateTable(context.Background(), 111, mockConnections, expire)
+	assert.Len(t, procConnMap, 3)
+	assert.Contains(t, procConnMap, addr1)
+	assert.Contains(t, procConnMap, addr2)
+	assert.Contains(t, procConnMap, addr3)
+
+	time.Sleep(2 * expire)
+	updateTable(context.Background(), 111, mockConnections, expire)
+	fmt.Println("testing")
+	assert.Len(t, procConnMap, 2)
+	assert.Contains(t, procConnMap, addr1)
+	assert.NotContains(t, procConnMap, addr2)
+	assert.Contains(t, procConnMap, addr3)
+}
+
+func TestHandlingErrorsOnRefresh(t *testing.T) {
+	testErrChan := make(chan error)
+	defer replaceGlobalVar(&errChan, testErrChan)()
+
+	mockConnProvider := func(_ context.Context, _ string) ([]net.ConnectionStat, error) { return nil, errors.New("test") }
+
+	go updateTable(context.Background(), -1, mockConnProvider, time.Second)
+
+	assert.Error(t, <-testErrChan)
+}
+
+func TestGuessPidByRemote(t *testing.T) {
+	testTab := make(map[net.Addr]*procNetStat)
+	rAddr := net.Addr{IP: "104.18.138.67", Port: 443}
+	lAddr := net.Addr{IP: "192.168.0.235", Port: 20781}
+	lAddr2 := net.Addr{IP: "192.168.0.235", Port: 21326}
+	testTab[lAddr] = &procNetStat{Pid: -1, RemoteAddr: rAddr}
+	defer replaceGlobalVar(&procConnMap, testTab)()
+
+	mockConnections := []net.ConnectionStat{{Pid: 123, Raddr: rAddr, Laddr: lAddr2}}
+
+	assert.EqualValues(t, -1, testTab[lAddr].Pid)
+
+	guessPidByRemote(mockConnections)
+
+	assert.EqualValues(t, 123, testTab[lAddr].Pid)
+}
+
+func BenchmarkUpdateTable(b *testing.B) {
+	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
+
+	b.ResetTimer()
+
+	for range b.N {
+		updateTable(context.Background(), -1, net.ConnectionsWithContext, time.Second)
+	}
+}
+
+func BenchmarkGetProcConnMapCopy(b *testing.B) {
+	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
+
+	b.ResetTimer()
+
+	for range b.N {
+		getProcConnMapCopy()
+	}
+}
+
+func replaceGlobalVar[T any](target *T, replacement T) func() {
+	saveVal := *target
+	*target = replacement
+	return func() { *target = saveVal }
+}
