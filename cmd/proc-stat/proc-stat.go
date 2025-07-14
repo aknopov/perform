@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -12,16 +13,17 @@ import (
 	"github.com/aknopov/perform"
 	"github.com/aknopov/perform/cmd/cpushare"
 	pm "github.com/aknopov/perform/cmd/param"
+	"github.com/aknopov/perform/cmd/proc-stat/net"
 
 	ps "github.com/mitchellh/go-ps"
 	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
 )
 
 var (
 	NO_TIMESTAT = &cpu.TimesStat{}
 	NO_MEMSTAT  = &process.MemoryInfoStat{}
+	NO_NET_IO   = []net.IOCountersStat{}
 )
 
 // Function substitutions for unit tests
@@ -53,8 +55,26 @@ func main() {
 	p, _ := process.NewProcess(int32(pid))
 	fmt.Printf("Getting performance data for the process '%s' (pid=%d)\n\n", cmd, pid)
 
+	if slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx) {
+		errChan := net.StartTracing(context.Background(), p.Pid, refreshPeriod/2)
+		go watchErrors(context.Background(), errChan)
+	}
+
 	pm.PrintHeader(os.Stdout, paramList)
 	pollStats(pm.NewQProcess(p), paramList, refreshPeriod)
+}
+
+func watchErrors(ctx context.Context, errChan chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errChan:
+			fmt.Fprintf(os.Stderr, "\x1b[31m%v\x1b[0m\n", err)
+		default:
+			time.Sleep(time.Second)
+		}
+	}
 }
 
 func reduceArg[A any, R any](f func(A) (R, error), arg A) func() (R, error) {
@@ -63,9 +83,9 @@ func reduceArg[A any, R any](f func(A) (R, error), arg A) func() (R, error) {
 
 func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Duration) {
 
-	getProcNetFn := reduceArg(proc.NetIOCounters, false)
+	getProcNetFn := net.GetProcessNetIOCounters
 	queryNet := slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx)
-	netInfo := pm.NO_NET_IO
+	var netStat []net.IOCountersStat
 
 	ticker := time.NewTicker(refreshPeriod)
 	values := make([]float64, len(paramList))
@@ -76,18 +96,18 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 		}
 
 		if queryNet {
-			netInfo = perform.AssumeOnErr(getProcNetFn, pm.NO_NET_IO)
+			netStat = perform.AssumeOnErr(getProcNetFn, NO_NET_IO)
 		}
 
 		for i, p := range paramList {
-			values[i] = getValue(proc, netInfo, p)
+			values[i] = getValue(proc, netStat, p)
 		}
 
 		pm.PrintValues(os.Stdout, paramList, values)
 	}
 }
 
-func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
+func getValue(proc pm.IQProcess, netStat []net.IOCountersStat, p pm.ParamType) float64 {
 
 	provideCpuPerc := func() float64 { return perform.AssumeOnErr(reduceArg(proc.Percent, 0), 0) / float64(getNumCPU()) }
 	switch p {
@@ -105,13 +125,13 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 		return float64(perform.AssumeOnErr(proc.NumThreads, -1))
 	case pm.Tx:
 		var txBytes uint64
-		for _, ni := range netInfo {
+		for _, ni := range netStat {
 			txBytes += ni.BytesSent
 		}
 		return float64(txBytes) / 1024
 	case pm.Rx:
 		var rxBytes uint64
-		for _, ni := range netInfo {
+		for _, ni := range netStat {
 			rxBytes += ni.BytesRecv
 		}
 		return float64(rxBytes) / 1024
@@ -120,26 +140,6 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 	default:
 		panic(fmt.Errorf("unknown parameter type: %v", p))
 	}
-}
-
-// Deprecated: use getProcPids
-func getProcPid(cmd string) int {
-	procList := perform.AssertNoErr(getProcessList())
-
-	pid, err := strconv.Atoi(cmd)
-
-	for _, p := range procList {
-		if err == nil && pid == p.Pid() {
-			return pid
-		} else if strings.Contains(p.Executable(), cmd) {
-			return p.Pid()
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "Can't find process with PID or command line '%s'\n", cmd)
-	os.Exit(1)
-
-	return -1
 }
 
 func getProcIds(cmd string) (int, string) {

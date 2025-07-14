@@ -9,10 +9,10 @@ import (
 	"time"
 
 	pm "github.com/aknopov/perform/cmd/param"
+	"github.com/aknopov/perform/cmd/proc-stat/net"
 	"github.com/aknopov/perform/mocker"
 	ps "github.com/mitchellh/go-ps"
 	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
 	"github.com/stretchr/testify/assert"
 )
@@ -29,15 +29,17 @@ func TestGetProcPid(t *testing.T) {
 
 	mockProcess := NewMockPsProcess(t)
 	mockProcess.EXPECT().Pid().Return(123)
-	mockProcess.EXPECT().Executable().Return("prog")
+	mockProcess.EXPECT().Executable().Return("prog.out")
 
 	testGetProcessList := func() ([]ps.Process, error) { return []ps.Process{mockProcess}, nil }
 	defer mocker.ReplaceItem(&getProcessList, testGetProcessList)()
 
-	pid := getProcPid("prog")
+	pid, cmd := getProcIds("prog")
 	assertT.Equal(123, pid)
-	pid = getProcPid("123")
+	assertT.Equal("prog.out", cmd)
+	pid, cmd = getProcIds("123")
 	assertT.Equal(123, pid)
+	assertT.Equal("prog.out", cmd)
 }
 
 func TestGetProcIds(t *testing.T) {
@@ -142,31 +144,6 @@ func TestPollStats(t *testing.T) {
 	pollStats(qProc, paramList, 100*time.Millisecond)
 }
 
-func TestPollStatsWithNet(t *testing.T) {
-	mockProcess := NewMockPsProcess(t)
-	mockProcess.EXPECT().Pid().Return(123)
-
-	qProc := NewMockQIQProcess(t)
-	qProc.EXPECT().GetPID().Return(123).Times(2)
-	qProc.EXPECT().Times().Return(&testTimes, nil).Once()
-	qProc.EXPECT().NetIOCounters(false).Return(testNetIO, nil).Once()
-
-	cnt := 0
-	testFindProcess := func(pid int) (ps.Process, error) {
-		cnt++
-		if cnt == 1 {
-			return mockProcess, nil
-		} else {
-			return nil, errTest
-		}
-	}
-	defer mocker.ReplaceItem(&findProcess, testFindProcess)()
-
-	paramList := pm.ParamList{pm.Cpu, pm.Tx}
-
-	pollStats(qProc, paramList, 100*time.Millisecond)
-}
-
 func TestGetValue(t *testing.T) {
 	assertT := assert.New(t)
 
@@ -226,8 +203,8 @@ func TestGetValueRecovery(t *testing.T) {
 	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Cpu))
 	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Mem))
 	assertT.EqualValues(-1, getValue(qProc, testNetIO, pm.PIDs))
-	assertT.EqualValues(0, getValue(qProc, pm.NO_NET_IO, pm.Tx))
-	assertT.EqualValues(0, getValue(qProc, pm.NO_NET_IO, pm.Rx))
+	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Tx))
+	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Rx))
 }
 
 func TestUsage(t *testing.T) {
