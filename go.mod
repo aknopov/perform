@@ -78,6 +78,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/docker v28.1.1+incompatible
 	github.com/ericlagergren/decimal v0.0.0-20240411145413-00de7ca16731
+	github.com/google/gopacket v1.1.19
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

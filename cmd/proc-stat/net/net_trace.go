@@ -52,7 +52,7 @@ func StartTracing(ctx context.Context, ppid int32, intvl time.Duration) chan err
 
 	pid = ppid
 	go pollNetStat(ctx, ppid, intvl)
-	// UC tracePackets(ctx)
+	tracePackets(ctx)
 
 	return errChan
 }
@@ -142,7 +142,6 @@ func updateTable(ctx context.Context, pid int32, connProvider connProviderF, exp
 	}
 
 	watchLock.Lock()
-	defer watchLock.Unlock()
 
 	ntrans := 0
 	// remove entries for closed connections
@@ -166,6 +165,8 @@ func updateTable(ctx context.Context, pid int32, connProvider connProviderF, exp
 			ntrans--
 		}
 	}
+
+	 watchLock.Unlock()
 
 	// Deal with remained transient connections
 	if ntrans > 0 {
