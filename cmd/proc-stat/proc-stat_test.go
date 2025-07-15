@@ -20,7 +20,7 @@ import (
 var (
 	testTimes  = cpu.TimesStat{User: 1234, System: 555}
 	testMemory = process.MemoryInfoStat{RSS: 1024 * 1024}
-	testNetIO  = []net.IOCountersStat{{BytesSent: 2 * 1024, BytesRecv: 3 * 1024}}
+	testNetIO  = net.IOCountersStat{BytesSent: 2 * 1024, BytesRecv: 3 * 1024}
 	errTest    = fmt.Errorf("test error")
 )
 
@@ -116,8 +116,8 @@ func TestNetIO(t *testing.T) {
 
 	qProc := NewMockQIQProcess(t)
 
-	assertT.EqualValues(2, getValue(qProc, testNetIO, pm.Tx))
-	assertT.EqualValues(3, getValue(qProc, testNetIO, pm.Rx))
+	assertT.EqualValues(2, getValue(qProc, &testNetIO, pm.Tx))
+	assertT.EqualValues(3, getValue(qProc, &testNetIO, pm.Rx))
 }
 
 func TestPollStats(t *testing.T) {
@@ -156,16 +156,16 @@ func TestGetValue(t *testing.T) {
 	newGetNumCPU := func() int { return 1 }
 	defer mocker.ReplaceItem(&getNumCPU, newGetNumCPU)()
 
-	assertT.EqualValues(1234+555, getValue(qProc, testNetIO, pm.Cpu))
-	assertT.EqualValues(1024, getValue(qProc, testNetIO, pm.Mem))
-	assertT.EqualValues(1, getValue(qProc, testNetIO, pm.CPUs))
-	assertT.EqualValues(13, getValue(qProc, testNetIO, pm.PIDs))
+	assertT.EqualValues(1234+555, getValue(qProc, &testNetIO, pm.Cpu))
+	assertT.EqualValues(1024, getValue(qProc, &testNetIO, pm.Mem))
+	assertT.EqualValues(1, getValue(qProc, &testNetIO, pm.CPUs))
+	assertT.EqualValues(13, getValue(qProc, &testNetIO, pm.PIDs))
 	// measurement starts from 0 - see TestNetIO
-	assertT.EqualValues(2, getValue(qProc, testNetIO, pm.Tx))
-	assertT.EqualValues(3, getValue(qProc, testNetIO, pm.Rx))
-	assertT.EqualValues(44, getValue(qProc, testNetIO, pm.CpuPerc))
+	assertT.EqualValues(2, getValue(qProc, &testNetIO, pm.Tx))
+	assertT.EqualValues(3, getValue(qProc, &testNetIO, pm.Rx))
+	assertT.EqualValues(44, getValue(qProc, &testNetIO, pm.CpuPerc))
 
-	assertT.Panics(func() { getValue(qProc, testNetIO, pm.Rx+100) })
+	assertT.Panics(func() { getValue(qProc, &testNetIO, pm.Rx+100) })
 }
 
 func TestPollCyclesStats(t *testing.T) {
@@ -200,9 +200,9 @@ func TestGetValueRecovery(t *testing.T) {
 	qProc.EXPECT().MemoryInfo().Return(nil, errTest).Once()
 	qProc.EXPECT().NumThreads().Return(0, errTest)
 
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Cpu))
-	assertT.EqualValues(0, getValue(qProc, testNetIO, pm.Mem))
-	assertT.EqualValues(-1, getValue(qProc, testNetIO, pm.PIDs))
+	assertT.EqualValues(0, getValue(qProc, &testNetIO, pm.Cpu))
+	assertT.EqualValues(0, getValue(qProc, &testNetIO, pm.Mem))
+	assertT.EqualValues(-1, getValue(qProc, &testNetIO, pm.PIDs))
 	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Tx))
 	assertT.EqualValues(0, getValue(qProc, NO_NET_IO, pm.Rx))
 }

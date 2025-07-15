@@ -3,7 +3,6 @@ package net
 import (
 	"context"
 	"errors"
-	"fmt"
 	sysnet "net"
 	"slices"
 	"time"
@@ -23,7 +22,7 @@ const (
 	PCAP_IF_CONNECTION_STATUS_CONNECTED      = uint32(0x00000010)
 	PCAP_IF_CONNECTION_STATUS_DISCONNECTED   = uint32(0x00000020)
 	PCAP_IF_CONNECTION_STATUS_NOT_APPLICABLE = uint32(0x00000030)
-	PCAP_GTG_FLAGS                           = uint32(PCAP_IF_UP | PCAP_IF_RUNNING | PCAP_IF_CONNECTION_STATUS_CONNECTED)
+	PCAP_GTG_FLAGS                           = PCAP_IF_UP | PCAP_IF_RUNNING | PCAP_IF_CONNECTION_STATUS_CONNECTED
 )
 
 const (
@@ -70,7 +69,6 @@ func processDeviceMsgs(ctx context.Context, devs []pcap.Interface, openLive open
 	var handle *pcap.Handle
 	var err error
 
-	// packetChnls := make(map[*pcap.Interface] chan gopacket.Packet)
 	packetChnls := make([]pCapChannel, 0)
 	channelDevs := make(map[pCapChannel]*pcap.Interface)
 	for _, dev := range devs {
@@ -80,7 +78,7 @@ func processDeviceMsgs(ctx context.Context, devs []pcap.Interface, openLive open
 		}
 		defer handle.Close()
 
-		if handle.SetBPFFilter("tcp || udp") != nil {
+		if err = handle.SetBPFFilter("tcp || udp"); err != nil {
 			errChan <- err
 			continue
 		}
@@ -103,43 +101,35 @@ func processDeviceMsgs(ctx context.Context, devs []pcap.Interface, openLive open
 	}
 }
 
-func updateIfName(stat *procNetStat, iName string) {
-	if len(stat.NetCounters.Name) == 0 {
-		stat.NetCounters.Name = iName
-	}
-}
-
 func ipMatch(ip sysnet.IP, nicAddr pcap.InterfaceAddress) bool {
 	return slices.Equal(ip.Mask(nicAddr.Netmask), nicAddr.IP.Mask(nicAddr.Netmask))
 }
 
 // Figures which address is local and which remote
-func sortAddresses(addr1 *net.Addr, addr2 *net.Addr, dev *pcap.Interface) (*net.Addr, *net.Addr, error) {
+func sortAddresses(addr1 *net.Addr, addr2 *net.Addr, dev *pcap.Interface) (*net.Addr, *net.Addr) {
 	ip1 := sysnet.ParseIP(addr1.IP)
 	ip2 := sysnet.ParseIP(addr2.IP)
 	for _, nicAddr := range dev.Addresses {
 		switch {
 		case ipMatch(ip1, nicAddr) && !ipMatch(ip2, nicAddr):
-			return addr1, addr2, nil
+			return addr1, addr2
 		case ipMatch(ip2, nicAddr) && !ipMatch(ip1, nicAddr):
-			return addr2, addr1, nil
+			return addr2, addr1
 		case ipMatch(ip1, nicAddr) && addr1.Port >= addr2.Port:
-			return addr1, addr2, nil
+			return addr1, addr2
 		case ipMatch(ip2, nicAddr) && addr1.Port < addr2.Port:
-			return addr2, addr1, nil
+			return addr2, addr1
 		}
 	}
-	return nil, nil, fmt.Errorf("addresses %v, %v don't belong to the interface %s", addr1, addr2, dev.Name)
+	return nil, nil
 }
 
 func addTransientConn(srcAddr *net.Addr, dstAddr *net.Addr, dev *pcap.Interface) *net.Addr {
-	lclAddr, rmtAddr, err := sortAddresses(srcAddr, dstAddr, dev)
-	if err != nil {
-		errChan <- err
+	lclAddr, rmtAddr := sortAddresses(srcAddr, dstAddr, dev)
+	if lclAddr == nil || rmtAddr == nil {
 		return nil
 	}
 
-	// UC fmt.Fprintf(os.Stderr, "Adding blank counters for %v\n", *rmtAddr)
 	procConnMap[*lclAddr] = &procNetStat{Pid: -1, NetCounters: IOCountersStat{}, RemoteAddr: *rmtAddr, LastUpdate: time.Now()}
 	return lclAddr
 }
@@ -157,7 +147,7 @@ func processPacket(p gopacket.Packet, dev *pcap.Interface) {
 	if decodeTCP(p, &srcAddr, &dstAddr) || decodeUDP(p, &srcAddr, &dstAddr) {
 
 		watchLock.Lock()
-		statOut, isOut := procConnMap[srcAddr] // UC fatal error:  concurrent map read and map write
+		statOut, isOut := procConnMap[srcAddr]
 		statIn, isIn := procConnMap[dstAddr]
 		if !isIn && !isOut {
 			addTransientConn(&srcAddr, &dstAddr, dev)
@@ -167,19 +157,15 @@ func processPacket(p gopacket.Packet, dev *pcap.Interface) {
 		watchLock.Unlock()
 
 		if isOut {
-			// UC fmt.Fprintf(os.Stderr, "Found outgoing conversation for process %d\n", statOut.Pid)
 			statOut.NetCounters.BytesSent += nBytes
 			statOut.NetCounters.PacketsSent++
 			statOut.NetCounters.Errout += errCnt
 			statOut.LastUpdate = time.Now()
-			updateIfName(statOut, dev.Name)
 		} else if isIn {
-			// UC fmt.Fprintf(os.Stderr, "Found incoming conversation for process %d\n", statIn.Pid)
 			statIn.NetCounters.BytesRecv += nBytes
 			statIn.NetCounters.PacketsRecv++
 			statIn.NetCounters.Errin += errCnt
 			statIn.LastUpdate = time.Now()
-			updateIfName(statIn, dev.Name)
 		}
 	}
 }

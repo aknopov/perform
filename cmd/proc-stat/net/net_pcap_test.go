@@ -166,24 +166,25 @@ func TestSortAddresses(t *testing.T) {
 	}}
 	dev2 := pcap.Interface{Name: "lo", Addresses: []pcap.InterfaceAddress{{IP: sysnet.ParseIP("127.0.0.1")}, {IP: sysnet.ParseIP("::1")}}}
 
-	lAddr, rAddr, _ := sortAddresses(&addr1, &addr2, &dev1)
+	lAddr, rAddr := sortAddresses(&addr1, &addr2, &dev1)
 	assert.Equal(t, toSlice(&addr1, &addr2), toSlice(lAddr, rAddr))
-	lAddr, rAddr, _ = sortAddresses(&addr2, &addr1, &dev1)
+	lAddr, rAddr = sortAddresses(&addr2, &addr1, &dev1)
 	assert.Equal(t, toSlice(&addr1, &addr2), toSlice(lAddr, rAddr))
 
-	lAddr, rAddr, _ = sortAddresses(&addr3, &addr4, &dev2)
+	lAddr, rAddr = sortAddresses(&addr3, &addr4, &dev2)
 	assert.Equal(t, toSlice(&addr3, &addr4), toSlice(lAddr, rAddr))
-	lAddr, rAddr, _ = sortAddresses(&addr4, &addr3, &dev2)
+	lAddr, rAddr = sortAddresses(&addr4, &addr3, &dev2)
 	assert.Equal(t, toSlice(&addr3, &addr4), toSlice(lAddr, rAddr))
 
 	// ambiguous case - local connection
-	lAddr, rAddr, _ = sortAddresses(&addr6, &addr7, &dev1)
+	lAddr, rAddr = sortAddresses(&addr6, &addr7, &dev1)
 	assert.Equal(t, toSlice(&addr6, &addr7), toSlice(lAddr, rAddr))
-	lAddr, rAddr, _ = sortAddresses(&addr7, &addr6, &dev1)
+	lAddr, rAddr = sortAddresses(&addr7, &addr6, &dev1)
 	assert.Equal(t, toSlice(&addr7, &addr6), toSlice(lAddr, rAddr))
 
-	_, _, err := sortAddresses(&addr3, &addr5, &dev1)
-	assert.Error(t, err)
+	lAddr, rAddr = sortAddresses(&addr3, &addr5, &dev1)
+	assert.Nil(t, lAddr)
+	assert.Nil(t, rAddr)
 }
 
 func TestProcessPacket(t *testing.T) {
@@ -203,7 +204,6 @@ func TestProcessPacket(t *testing.T) {
 	assert.Zero(t, ps.NetCounters.PacketsSent)
 	assert.Zero(t, ps.NetCounters.BytesSent)
 	assert.Zero(t, ps.NetCounters.Errout)
-	assert.Equal(t, "tst", ps.NetCounters.Name)
 	assert.NotZero(t, ps.LastUpdate)
 }
 

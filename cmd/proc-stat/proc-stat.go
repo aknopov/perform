@@ -23,7 +23,7 @@ import (
 var (
 	NO_TIMESTAT = &cpu.TimesStat{}
 	NO_MEMSTAT  = &process.MemoryInfoStat{}
-	NO_NET_IO   = []net.IOCountersStat{}
+	NO_NET_IO   = &net.IOCountersStat{}
 )
 
 // Function substitutions for unit tests
@@ -70,7 +70,7 @@ func watchErrors(ctx context.Context, errChan chan error) {
 		case <-ctx.Done():
 			return
 		case err := <-errChan:
-			fmt.Fprintf(os.Stderr, "\x1b[31m%v\x1b[0m\n", err)
+			fmt.Fprintf(os.Stderr, "\x1b[35m%v\x1b[0m\n", err)
 		default:
 			time.Sleep(time.Second)
 		}
@@ -83,9 +83,8 @@ func reduceArg[A any, R any](f func(A) (R, error), arg A) func() (R, error) {
 
 func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Duration) {
 
-	getProcNetFn := net.GetProcessNetIOCounters
 	queryNet := slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx)
-	var netStat []net.IOCountersStat
+	var netStat *net.IOCountersStat
 
 	ticker := time.NewTicker(refreshPeriod)
 	values := make([]float64, len(paramList))
@@ -96,7 +95,7 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 		}
 
 		if queryNet {
-			netStat = perform.AssumeOnErr(getProcNetFn, NO_NET_IO)
+			netStat = perform.AssumeOnErr(net.GetProcessNetIOCounters, NO_NET_IO)
 		}
 
 		for i, p := range paramList {
@@ -107,7 +106,7 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 	}
 }
 
-func getValue(proc pm.IQProcess, netStat []net.IOCountersStat, p pm.ParamType) float64 {
+func getValue(proc pm.IQProcess, netStat *net.IOCountersStat, p pm.ParamType) float64 {
 
 	provideCpuPerc := func() float64 { return perform.AssumeOnErr(reduceArg(proc.Percent, 0), 0) / float64(getNumCPU()) }
 	switch p {
@@ -124,17 +123,9 @@ func getValue(proc pm.IQProcess, netStat []net.IOCountersStat, p pm.ParamType) f
 	case pm.PIDs:
 		return float64(perform.AssumeOnErr(proc.NumThreads, -1))
 	case pm.Tx:
-		var txBytes uint64
-		for _, ni := range netStat {
-			txBytes += ni.BytesSent
-		}
-		return float64(txBytes) / 1024
+		return float64(netStat.BytesSent) / 1024
 	case pm.Rx:
-		var rxBytes uint64
-		for _, ni := range netStat {
-			rxBytes += ni.BytesRecv
-		}
-		return float64(rxBytes) / 1024
+		return float64(netStat.BytesRecv) / 1024
 	case pm.Cyc:
 		return cpushare.GetProcCycles(provideCpuPerc)
 	default:

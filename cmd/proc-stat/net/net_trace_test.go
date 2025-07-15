@@ -3,7 +3,6 @@ package net
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -54,9 +53,9 @@ func TestGetProcConnMapCopy(t *testing.T) {
 
 func TestGetProcessNetIOCounters(t *testing.T) {
 	testTab := make(map[net.Addr]*procNetStat)
-	stat1 := IOCountersStat{Name: "if1", BytesSent: 111, BytesRecv: 222, PacketsSent: 3, PacketsRecv: 4}
-	stat2 := IOCountersStat{Name: "if2", BytesSent: 333, BytesRecv: 44, PacketsSent: 2, PacketsRecv: 2}
-	stat3 := IOCountersStat{Name: "if1", BytesSent: 444, BytesRecv: 57, PacketsSent: 5, PacketsRecv: 7}
+	stat1 := IOCountersStat{BytesSent: 111, BytesRecv: 222, PacketsSent: 3, PacketsRecv: 4}
+	stat2 := IOCountersStat{BytesSent: 333, BytesRecv: 44, PacketsSent: 2, PacketsRecv: 2}
+	stat3 := IOCountersStat{BytesSent: 444, BytesRecv: 57, PacketsSent: 5, PacketsRecv: 7}
 	testTab[net.Addr{IP: "192.168.0.235", Port: 20781}] = &procNetStat{Pid: 111, NetCounters: stat1}
 	testTab[net.Addr{IP: "127.0.0.1", Port: 22137}] = &procNetStat{Pid: 111, NetCounters: stat2}
 	testTab[net.Addr{IP: "192.168.0.235", Port: 20675}] = &procNetStat{Pid: 411, NetCounters: stat3}
@@ -65,13 +64,12 @@ func TestGetProcessNetIOCounters(t *testing.T) {
 
 	counts, err := GetProcessNetIOCounters()
 	require.NoError(t, err)
-	assert.Len(t, counts, 1)
-	assert.EqualValues(t, 444, counts[0].BytesSent)
-	assert.EqualValues(t, 266, counts[0].BytesRecv)
-	assert.EqualValues(t, 5, counts[0].PacketsSent)
-	assert.EqualValues(t, 6, counts[0].PacketsRecv)
-	assert.Zero(t, counts[0].Errin)
-	assert.Zero(t, counts[0].Errout)
+	assert.EqualValues(t, 444, counts.BytesSent)
+	assert.EqualValues(t, 266, counts.BytesRecv)
+	assert.EqualValues(t, 5, counts.PacketsSent)
+	assert.EqualValues(t, 6, counts.PacketsRecv)
+	assert.Zero(t, counts.Errin)
+	assert.Zero(t, counts.Errout)
 
 	pid = 777
 	_, err = GetProcessNetIOCounters()
@@ -96,6 +94,7 @@ var (
 	addr2       = net.Addr{IP: "127.0.0.1", Port: 12346}
 	addr3       = net.Addr{IP: "127.0.0.1", Port: 12347}
 	connections = [][]net.ConnectionStat{
+		{net.ConnectionStat{Laddr: addr1, Pid: 222}},
 		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr2, Pid: 111}},
 		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr3, Pid: 111}},
 		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr3, Pid: 111}},
@@ -115,6 +114,9 @@ func TestConnMapRefresh(t *testing.T) {
 	assert.Empty(t, procConnMap)
 
 	updateTable(context.Background(), 111, mockConnections, expire)
+	assert.Len(t, procConnMap, 0)
+
+	updateTable(context.Background(), 111, mockConnections, expire)
 	assert.Len(t, procConnMap, 2)
 	assert.Contains(t, procConnMap, addr1)
 	assert.Contains(t, procConnMap, addr2)
@@ -128,10 +130,9 @@ func TestConnMapRefresh(t *testing.T) {
 
 	time.Sleep(2 * expire)
 	updateTable(context.Background(), 111, mockConnections, expire)
-	fmt.Println("testing")
-	assert.Len(t, procConnMap, 2)
+	assert.Len(t, procConnMap, 3)
 	assert.Contains(t, procConnMap, addr1)
-	assert.NotContains(t, procConnMap, addr2)
+	assert.Contains(t, procConnMap, addr2)
 	assert.Contains(t, procConnMap, addr3)
 }
 

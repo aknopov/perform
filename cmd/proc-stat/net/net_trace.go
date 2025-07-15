@@ -3,7 +3,6 @@ package net
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 
 // Reduced net.IOCountersStat
 type IOCountersStat struct {
-	Name        string `json:"name"`        // interface name
 	BytesSent   uint64 `json:"bytesSent"`   // number of bytes sent
 	BytesRecv   uint64 `json:"bytesRecv"`   // number of bytes received
 	PacketsSent uint64 `json:"packetsSent"` // number of packets sent
@@ -57,38 +55,28 @@ func StartTracing(ctx context.Context, ppid int32, intvl time.Duration) chan err
 	return errChan
 }
 
-// GetProcessNetIOCounters returns NetIOCounters of the process.
-func GetProcessNetIOCounters() ([]IOCountersStat, error) {
+// GetProcessNetIOCounters sums all registered conversations
+func GetProcessNetIOCounters() (*IOCountersStat, error) {
 	lclConMap := getProcConnMapCopy()
-	countsMap := make(map[string]IOCountersStat)
-	fmt.Fprintf(os.Stderr, "Requesting process connections\n") // UC debug
+	var ret *IOCountersStat
 	for _, ps := range lclConMap {
 		if ps.Pid != pid {
 			continue
 		}
 
-		iName := ps.NetCounters.Name
-		if stat, ok := countsMap[iName]; ok {
-			sumStats(&stat, &ps.NetCounters)
-		} else {
-			countsMap[iName] = ps.NetCounters
+		if ret == nil {
+			ret = new(IOCountersStat)
 		}
+
+		sumStats(ret, &ps.NetCounters)
 	}
 
-	if len(countsMap) == 0 {
-		return nil, fmt.Errorf("no net counters for pid %d", pid)
+	var err error
+	if ret == nil {
+		err = fmt.Errorf("no net counters for pid %d", pid)
 	}
 
-	ret := make([]IOCountersStat, 0)
-	for _, cs := range countsMap {
-		if len(ret) == 0 {
-			ret = append(ret, cs)
-		} else {
-			sumStats(&ret[0], &cs)
-		}
-	}
-
-	return ret, nil
+	return ret, err
 }
 
 func sumStats(stat1 *IOCountersStat, stat2 *IOCountersStat) {
@@ -125,13 +113,12 @@ func pollNetStat(ctx context.Context, pid int32, intvl time.Duration) {
 	}
 }
 
-func updateTable(ctx context.Context, pid int32, connProvider connProviderF, expiry time.Duration) { // UC add pid to args
+func updateTable(ctx context.Context, pid int32, connProvider connProviderF, expiry time.Duration) {
 	conns, err := connProvider(ctx, "all")
 	if err != nil {
 		errChan <- err
 		return
 	}
-	// fmt.Fprintf(os.Stderr, "Discovered %d connections\n", len(conns)) // UC Debug
 
 	tempAddrMap := make(map[net.Addr]net.ConnectionStat)
 	// Leave only active connections of the process
@@ -146,8 +133,7 @@ func updateTable(ctx context.Context, pid int32, connProvider connProviderF, exp
 	ntrans := 0
 	// remove entries for closed connections
 	for a, ps := range procConnMap {
-		if _, ok := tempAddrMap[a]; !ok && time.Since(ps.LastUpdate) > expiry {
-			// fmt.Fprintf(os.Stderr, "Removing conversation of process %d to %v\n", ps.Pid, ps.RemoteAddr) // UC debug
+		if _, ok := tempAddrMap[a]; !ok && ps.Pid == -1 && time.Since(ps.LastUpdate) > expiry {
 			delete(procConnMap, a)
 		} else if ok && ps.Pid == -1 {
 			ntrans++
@@ -157,8 +143,7 @@ func updateTable(ctx context.Context, pid int32, connProvider connProviderF, exp
 	// add new connections
 	for a, c := range tempAddrMap {
 		ps, ok := procConnMap[a]
-		if !ok { // UC fatal error: concurrent map read and map write
-			// fmt.Fprintf(os.Stderr, "Adding conversation of process %d to %v\n", c.Pid, c.Raddr) // UC debug
+		if !ok {
 			procConnMap[a] = &procNetStat{Pid: c.Pid, NetCounters: IOCountersStat{}, RemoteAddr: c.Raddr, LastUpdate: time.Now()}
 		} else if ps.Pid == -1 {
 			ps.Pid = c.Pid
@@ -166,7 +151,7 @@ func updateTable(ctx context.Context, pid int32, connProvider connProviderF, exp
 		}
 	}
 
-	 watchLock.Unlock()
+	watchLock.Unlock()
 
 	// Deal with remained transient connections
 	if ntrans > 0 {
@@ -182,10 +167,13 @@ func guessPidByRemote(conns []net.ConnectionStat) {
 	for _, conn := range conns {
 		tempAddrMap[conn.Raddr] = conn
 	}
+
+	watchLock.RLock()
+	defer watchLock.RUnlock()
+
 	for _, ps := range procConnMap {
 		if ps.Pid == -1 {
 			if ar, ok := tempAddrMap[ps.RemoteAddr]; ok {
-				fmt.Fprintf(os.Stderr, "Guessed connection for process %d to %v\n", ps.Pid, ps.RemoteAddr) // UC  debug
 				ps.Pid = ar.Pid
 			}
 		}
