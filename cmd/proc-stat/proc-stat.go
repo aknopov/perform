@@ -48,7 +48,7 @@ func main() {
 
 	pid, cmd := getProcIds(procId)
 	if pid == -1 {
-		fmt.Fprintf(os.Stderr, "Can't find process with PID or command line '%s'\n", cmd)
+		fmt.Fprintf(os.Stderr, "Can't find process with PID or command line '%s'\n", procId)
 		os.Exit(1)
 	}
 
@@ -95,7 +95,7 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 		}
 
 		if queryNet {
-			netStat = perform.AssumeOnErr(net.GetProcessNetIOCounters, NO_NET_IO)
+			netStat = perform.IgnoreErr(net.GetProcessNetIOCounters, NO_NET_IO)
 		}
 
 		for i, p := range paramList {

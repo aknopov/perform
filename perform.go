@@ -148,6 +148,15 @@ func calcStats(fixtures []*taskFixture) []RunStats {
 	return ret
 }
 
+// Ignore silently
+func IgnoreErr[T any](f func() (T, error), defVal T) T {
+	val, err := f()
+	if err != nil {
+		return defVal
+	}
+	return val
+}
+
 // Aid fo unexpected errors without recovery
 func AssertNoErr[T any](val T, err error) T {
 	if err != nil {
@@ -161,7 +170,6 @@ func AssumeOnErr[T any](f func() (T, error), defVal T) T {
 	val, err := f()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\x1b[35m%v\x1b[0m\n", err)
-		// println(err.Error())
 		return defVal
 	}
 	return val

@@ -44,7 +44,7 @@ func tracePackets(ctx context.Context) {
 		return
 	}
 
-	go processDeviceMsgs(ctx, devs, pcap.OpenLive)
+	processDeviceMsgs(ctx, devs, pcap.OpenLive)
 }
 
 func findActiveDevices(findDevs findDevsF) []pcap.Interface {

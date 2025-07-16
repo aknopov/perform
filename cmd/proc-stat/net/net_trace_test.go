@@ -12,6 +12,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	tIdx        = 0
+	addr1       = net.Addr{IP: "127.0.0.1", Port: 12345}
+	addr2       = net.Addr{IP: "127.0.0.1", Port: 12346}
+	addr3       = net.Addr{IP: "127.0.0.1", Port: 12347}
+	connections = [][]net.ConnectionStat{
+		{net.ConnectionStat{Laddr: addr1, Pid: 222}},
+		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr2, Pid: 111}},
+		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr3, Pid: 111}},
+		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr3, Pid: 111}},
+	}
+	expire = 20 * time.Millisecond
+)
+
+func mockConnsProvider(_ context.Context, _ string) ([]net.ConnectionStat, error) {
+	ret := connections[tIdx]
+	tIdx++
+	return ret, nil
+}
+
 func TestSingleStartInvocation(t *testing.T) {
 	defer replaceGlobalVar(&procConnMap, nil)()
 
@@ -27,7 +47,7 @@ func TestSingleStartInvocation(t *testing.T) {
 
 	select {
 	case err := <-errChan:
-		if !strings.HasPrefix(err.Error(), "You don't have permission to capture on that device") {
+		if !strings.Contains(err.Error(), "You don't have permission to capture on that device") {
 			t.Fatalf("No error expected - got %v", err)
 		}
 	case <-time.After(50 * time.Millisecond):
@@ -35,11 +55,11 @@ func TestSingleStartInvocation(t *testing.T) {
 }
 
 func TestGetProcConnMapCopy(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer replaceGlobalVar(&tIdx, 0)()
+	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
 
-	StartTracing(ctx, -1, 100*time.Millisecond)
-	time.Sleep(200 * time.Millisecond)
+	updateTable(context.Background(), 111, mockConnsProvider, expire)
+	updateTable(context.Background(), 111, mockConnsProvider, expire)
 
 	procNetStatCpy := getProcConnMapCopy()
 	assert.NotEmpty(t, procNetStatCpy)
@@ -71,65 +91,34 @@ func TestGetProcessNetIOCounters(t *testing.T) {
 	assert.Zero(t, counts.Errin)
 	assert.Zero(t, counts.Errout)
 
-	pid = 777
+	defer replaceGlobalVar(&pid, 777)()
 	_, err = GetProcessNetIOCounters()
 	assert.Error(t, err)
 }
 
-// UC temp commented out, waiting for tracePackets
-// func TestErrorReporting(t *testing.T) {
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	defer cancel()
-// 	defer replaceGlobalVar(&procConnMap, nil)()
-
-// 	errChan := StartTracing(ctx, 1, time.Millisecond)
-
-// 	err := <-errChan
-// 	assert.Error(t, err)
-// }
-
-var (
-	tIdx        = 0
-	addr1       = net.Addr{IP: "127.0.0.1", Port: 12345}
-	addr2       = net.Addr{IP: "127.0.0.1", Port: 12346}
-	addr3       = net.Addr{IP: "127.0.0.1", Port: 12347}
-	connections = [][]net.ConnectionStat{
-		{net.ConnectionStat{Laddr: addr1, Pid: 222}},
-		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr2, Pid: 111}},
-		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr3, Pid: 111}},
-		{net.ConnectionStat{Laddr: addr1, Pid: 111}, net.ConnectionStat{Laddr: addr3, Pid: 111}},
-	}
-)
-
-func mockConnections(_ context.Context, _ string) ([]net.ConnectionStat, error) {
-	ret := connections[tIdx]
-	tIdx++
-	return ret, nil
-}
-
 func TestConnMapRefresh(t *testing.T) {
+	defer replaceGlobalVar(&tIdx, 0)()
 	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
-	expire := 20 * time.Millisecond
 
 	assert.Empty(t, procConnMap)
 
-	updateTable(context.Background(), 111, mockConnections, expire)
+	updateTable(context.Background(), 111, mockConnsProvider, expire)
 	assert.Len(t, procConnMap, 0)
 
-	updateTable(context.Background(), 111, mockConnections, expire)
+	updateTable(context.Background(), 111, mockConnsProvider, expire)
 	assert.Len(t, procConnMap, 2)
 	assert.Contains(t, procConnMap, addr1)
 	assert.Contains(t, procConnMap, addr2)
 	assert.NotContains(t, procConnMap, addr3)
 
-	updateTable(context.Background(), 111, mockConnections, expire)
+	updateTable(context.Background(), 111, mockConnsProvider, expire)
 	assert.Len(t, procConnMap, 3)
 	assert.Contains(t, procConnMap, addr1)
 	assert.Contains(t, procConnMap, addr2)
 	assert.Contains(t, procConnMap, addr3)
 
 	time.Sleep(2 * expire)
-	updateTable(context.Background(), 111, mockConnections, expire)
+	updateTable(context.Background(), 111, mockConnsProvider, expire)
 	assert.Len(t, procConnMap, 3)
 	assert.Contains(t, procConnMap, addr1)
 	assert.Contains(t, procConnMap, addr2)

@@ -50,7 +50,7 @@ func StartTracing(ctx context.Context, ppid int32, intvl time.Duration) chan err
 
 	pid = ppid
 	go pollNetStat(ctx, ppid, intvl)
-	tracePackets(ctx)
+	go tracePackets(ctx)
 
 	return errChan
 }
