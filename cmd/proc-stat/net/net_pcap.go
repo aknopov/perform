@@ -130,7 +130,7 @@ func addTransientConn(srcAddr *net.Addr, dstAddr *net.Addr, dev *pcap.Interface)
 		return nil
 	}
 
-	procConnMap[*lclAddr] = &procNetStat{Pid: -1, NetCounters: IOCountersStat{}, RemoteAddr: *rmtAddr, LastUpdate: time.Now()}
+	procConnMap[*lclAddr] = createNetStat(-1, *rmtAddr, IOCountersStat{})
 	return lclAddr
 }
 
@@ -146,7 +146,7 @@ func processPacket(p gopacket.Packet, dev *pcap.Interface) {
 	var dstAddr, srcAddr net.Addr
 	if decodeTCP(p, &srcAddr, &dstAddr) || decodeUDP(p, &srcAddr, &dstAddr) {
 
-		watchLock.Lock()
+		connMapLock.Lock()
 		statOut, isOut := procConnMap[srcAddr]
 		statIn, isIn := procConnMap[dstAddr]
 		if !isIn && !isOut {
@@ -154,18 +154,22 @@ func processPacket(p gopacket.Packet, dev *pcap.Interface) {
 			statOut, isOut = procConnMap[srcAddr]
 			statIn, isIn = procConnMap[dstAddr]
 		}
-		watchLock.Unlock()
+		connMapLock.Unlock()
 
 		if isOut {
-			statOut.NetCounters.BytesSent += nBytes
-			statOut.NetCounters.PacketsSent++
-			statOut.NetCounters.Errout += errCnt
-			statOut.LastUpdate = time.Now()
+			statOut.lock.Lock()
+			statOut.netCounters.BytesSent += nBytes
+			statOut.netCounters.PacketsSent++
+			statOut.netCounters.Errout += errCnt
+			statOut.lastUpdate = time.Now()
+			statOut.lock.Unlock()
 		} else if isIn {
-			statIn.NetCounters.BytesRecv += nBytes
-			statIn.NetCounters.PacketsRecv++
-			statIn.NetCounters.Errin += errCnt
-			statIn.LastUpdate = time.Now()
+			statIn.lock.Lock()
+			statIn.netCounters.BytesRecv += nBytes
+			statIn.netCounters.PacketsRecv++
+			statIn.netCounters.Errin += errCnt
+			statIn.lastUpdate = time.Now()
+			statIn.lock.Unlock()
 		}
 	}
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/shirou/gopsutil/v4/net"
 )
 
-// Reduced net.IOCountersStat
+// Network data counters (reduced psutils IOCountersStat)
 type IOCountersStat struct {
 	BytesSent   uint64 `json:"bytesSent"`   // number of bytes sent
 	BytesRecv   uint64 `json:"bytesRecv"`   // number of bytes received
@@ -21,10 +21,11 @@ type IOCountersStat struct {
 
 // Network IO counters for a process
 type procNetStat struct {
-	Pid         int32          `json:"pid"`        // process PID
-	NetCounters IOCountersStat `json:"netCounts"`  // process network counters
-	RemoteAddr  net.Addr       `json:"remoteAddr"` // remote address
-	LastUpdate  time.Time      `json:"lastUpd"`    // last updated
+	pid         int32          // process PID
+	netCounters IOCountersStat // process network counters
+	remoteAddr  net.Addr       // remote address
+	lastUpdate  time.Time      // last updated
+	lock        *sync.Mutex    // modifications guard
 }
 
 // For unit test mocking
@@ -32,7 +33,7 @@ type connProviderF func(context.Context, string) ([]net.ConnectionStat, error)
 
 var (
 	procConnMap      map[net.Addr]*procNetStat
-	watchLock        sync.RWMutex
+	connMapLock      sync.RWMutex
 	errChan          chan error
 	pid              int32
 	void             = struct{}{}
@@ -60,7 +61,7 @@ func GetProcessNetIOCounters() (*IOCountersStat, error) {
 	lclConMap := getProcConnMapCopy()
 	var ret *IOCountersStat
 	for _, ps := range lclConMap {
-		if ps.Pid != pid {
+		if ps.pid != pid {
 			continue
 		}
 
@@ -68,7 +69,7 @@ func GetProcessNetIOCounters() (*IOCountersStat, error) {
 			ret = new(IOCountersStat)
 		}
 
-		sumStats(ret, &ps.NetCounters)
+		sumStats(ret, &ps.netCounters)
 	}
 
 	var err error
@@ -77,6 +78,10 @@ func GetProcessNetIOCounters() (*IOCountersStat, error) {
 	}
 
 	return ret, err
+}
+
+func createNetStat(pid int32, remoteAddr net.Addr, netCounters IOCountersStat) *procNetStat {
+	return &procNetStat{pid: pid, remoteAddr: remoteAddr, netCounters: netCounters, lastUpdate: time.Now(), lock: new(sync.Mutex)}
 }
 
 func sumStats(stat1 *IOCountersStat, stat2 *IOCountersStat) {
@@ -90,12 +95,14 @@ func sumStats(stat1 *IOCountersStat, stat2 *IOCountersStat) {
 
 // Deep copy of ProcConnMap!
 func getProcConnMapCopy() map[net.Addr]procNetStat {
-	watchLock.RLock()
-	defer watchLock.RUnlock()
+	connMapLock.RLock()
+	defer connMapLock.RUnlock()
 
 	newMap := make(map[net.Addr]procNetStat)
 	for key, value := range procConnMap {
+		value.lock.Lock()
 		newMap[key] = *value
+		value.lock.Unlock()
 	}
 	return newMap
 }
@@ -128,30 +135,32 @@ func updateTable(ctx context.Context, pid int32, connProvider connProviderF, exp
 		}
 	}
 
-	watchLock.Lock()
+	connMapLock.Lock()
 
 	ntrans := 0
 	// remove entries for closed connections
 	for a, ps := range procConnMap {
-		if _, ok := tempAddrMap[a]; !ok && ps.Pid == -1 && time.Since(ps.LastUpdate) > expiry {
+		ps.lock.Lock()
+		if _, ok := tempAddrMap[a]; !ok && ps.pid == -1 && time.Since(ps.lastUpdate) > expiry {
 			delete(procConnMap, a)
-		} else if ok && ps.Pid == -1 {
+		} else if ok && ps.pid == -1 {
 			ntrans++
 		}
+		ps.lock.Unlock()
 	}
 
 	// add new connections
 	for a, c := range tempAddrMap {
 		ps, ok := procConnMap[a]
 		if !ok {
-			procConnMap[a] = &procNetStat{Pid: c.Pid, NetCounters: IOCountersStat{}, RemoteAddr: c.Raddr, LastUpdate: time.Now()}
-		} else if ps.Pid == -1 {
-			ps.Pid = c.Pid
+			procConnMap[a] = createNetStat(c.Pid, c.Raddr, IOCountersStat{})
+		} else if ps.pid == -1 {
+			ps.pid = c.Pid
 			ntrans--
 		}
 	}
 
-	watchLock.Unlock()
+	connMapLock.Unlock()
 
 	// Deal with remained transient connections
 	if ntrans > 0 {
@@ -168,13 +177,13 @@ func guessPidByRemote(conns []net.ConnectionStat) {
 		tempAddrMap[conn.Raddr] = conn
 	}
 
-	watchLock.RLock()
-	defer watchLock.RUnlock()
+	connMapLock.RLock()
+	defer connMapLock.RUnlock()
 
 	for _, ps := range procConnMap {
-		if ps.Pid == -1 {
-			if ar, ok := tempAddrMap[ps.RemoteAddr]; ok {
-				ps.Pid = ar.Pid
+		if ps.pid == -1 {
+			if ar, ok := tempAddrMap[ps.remoteAddr]; ok {
+				ps.pid = ar.Pid
 			}
 		}
 	}

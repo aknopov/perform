@@ -67,7 +67,7 @@ func TestGetProcConnMapCopy(t *testing.T) {
 	// check deep copy
 	for k, v := range procConnMap {
 		vCopy := procNetStatCpy[k]
-		assert.NotEqual(t, v.NetCounters, &vCopy.NetCounters)
+		assert.NotEqual(t, v.netCounters, &vCopy.netCounters)
 	}
 }
 
@@ -76,9 +76,10 @@ func TestGetProcessNetIOCounters(t *testing.T) {
 	stat1 := IOCountersStat{BytesSent: 111, BytesRecv: 222, PacketsSent: 3, PacketsRecv: 4}
 	stat2 := IOCountersStat{BytesSent: 333, BytesRecv: 44, PacketsSent: 2, PacketsRecv: 2}
 	stat3 := IOCountersStat{BytesSent: 444, BytesRecv: 57, PacketsSent: 5, PacketsRecv: 7}
-	testTab[net.Addr{IP: "192.168.0.235", Port: 20781}] = &procNetStat{Pid: 111, NetCounters: stat1}
-	testTab[net.Addr{IP: "127.0.0.1", Port: 22137}] = &procNetStat{Pid: 111, NetCounters: stat2}
-	testTab[net.Addr{IP: "192.168.0.235", Port: 20675}] = &procNetStat{Pid: 411, NetCounters: stat3}
+	rAddr := net.Addr{IP: "172.217.165.14", Port: 443}
+	testTab[net.Addr{IP: "192.168.0.235", Port: 20781}] = createNetStat(111, rAddr, stat1)
+	testTab[net.Addr{IP: "127.0.0.1", Port: 22137}] = createNetStat(111, rAddr, stat2)
+	testTab[net.Addr{IP: "192.168.0.235", Port: 20675}] = createNetStat(411, rAddr, stat3)
 	defer replaceGlobalVar(&procConnMap, testTab)()
 	defer replaceGlobalVar(&pid, 111)()
 
@@ -141,16 +142,16 @@ func TestGuessPidByRemote(t *testing.T) {
 	rAddr := net.Addr{IP: "104.18.138.67", Port: 443}
 	lAddr := net.Addr{IP: "192.168.0.235", Port: 20781}
 	lAddr2 := net.Addr{IP: "192.168.0.235", Port: 21326}
-	testTab[lAddr] = &procNetStat{Pid: -1, RemoteAddr: rAddr}
+	testTab[lAddr] = createNetStat(-1, rAddr, IOCountersStat{})
 	defer replaceGlobalVar(&procConnMap, testTab)()
 
 	mockConnections := []net.ConnectionStat{{Pid: 123, Raddr: rAddr, Laddr: lAddr2}}
 
-	assert.EqualValues(t, -1, testTab[lAddr].Pid)
+	assert.EqualValues(t, -1, testTab[lAddr].pid)
 
 	guessPidByRemote(mockConnections)
 
-	assert.EqualValues(t, 123, testTab[lAddr].Pid)
+	assert.EqualValues(t, 123, testTab[lAddr].pid)
 }
 
 func BenchmarkUpdateTable(b *testing.B) {

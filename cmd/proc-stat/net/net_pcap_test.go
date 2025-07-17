@@ -197,14 +197,14 @@ func TestProcessPacket(t *testing.T) {
 	assert.Len(t, procConnMap, 1)
 	assert.Contains(t, procConnMap, expAddr)
 	ps := procConnMap[expAddr]
-	assert.EqualValues(t, -1, ps.Pid)
-	assert.EqualValues(t, 1, ps.NetCounters.PacketsRecv)
-	assert.EqualValues(t, 79, ps.NetCounters.BytesRecv)
-	assert.Zero(t, ps.NetCounters.Errin)
-	assert.Zero(t, ps.NetCounters.PacketsSent)
-	assert.Zero(t, ps.NetCounters.BytesSent)
-	assert.Zero(t, ps.NetCounters.Errout)
-	assert.NotZero(t, ps.LastUpdate)
+	assert.EqualValues(t, -1, ps.pid)
+	assert.EqualValues(t, 1, ps.netCounters.PacketsRecv)
+	assert.EqualValues(t, 79, ps.netCounters.BytesRecv)
+	assert.Zero(t, ps.netCounters.Errin)
+	assert.Zero(t, ps.netCounters.PacketsSent)
+	assert.Zero(t, ps.netCounters.BytesSent)
+	assert.Zero(t, ps.netCounters.Errout)
+	assert.NotZero(t, ps.lastUpdate)
 }
 
 func BenchmarkFindActiveDevices(b *testing.B) {
