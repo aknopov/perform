@@ -31,14 +31,17 @@ const (
 
 // For unit test mocking
 type (
-	findDevsF func() ([]pcap.Interface, error)
-	openLiveF func(device string, snaplen int32, promisc bool, timeout time.Duration) (*pcap.Handle, error)
+	findDevsF   func() ([]pcap.Interface, error)
+	openLiveF   func(_ string, _ int32, _ bool, _ time.Duration) (*pcap.Handle, error)
+	pCapChannel chan gopacket.Packet
 )
 
-type pCapChannel chan gopacket.Packet
+var (
+	findAllDevs = pcap.FindAllDevs
+)
 
 func tracePackets(ctx context.Context) {
-	devs := findActiveDevices(pcap.FindAllDevs)
+	devs := findActiveDevices(findAllDevs)
 	if len(devs) == 0 {
 		errChan <- errors.New("no active network devices found")
 		return
@@ -47,10 +50,10 @@ func tracePackets(ctx context.Context) {
 	processDeviceMsgs(ctx, devs, pcap.OpenLive)
 }
 
-func findActiveDevices(findDevs findDevsF) []pcap.Interface {
+func findActiveDevices(fFindDevs findDevsF) []pcap.Interface {
 	ret := make([]pcap.Interface, 0)
 
-	devs, err := findDevs()
+	devs, err := fFindDevs()
 	if err != nil {
 		errChan <- err
 		return ret
@@ -65,14 +68,14 @@ func findActiveDevices(findDevs findDevsF) []pcap.Interface {
 	return ret
 }
 
-func processDeviceMsgs(ctx context.Context, devs []pcap.Interface, openLive openLiveF) {
+func processDeviceMsgs(ctx context.Context, devs []pcap.Interface, fOpenLive openLiveF) {
 	var handle *pcap.Handle
 	var err error
 
 	packetChnls := make([]pCapChannel, 0)
 	channelDevs := make(map[pCapChannel]*pcap.Interface)
 	for _, dev := range devs {
-		if handle, err = openLive(dev.Name, 1600, false, 1*time.Second); err != nil {
+		if handle, err = fOpenLive(dev.Name, 1600, false, 1*time.Second); err != nil {
 			errChan <- err
 			continue
 		}

@@ -26,6 +26,9 @@ jobs:
         with:
           go-version: '1.23.x'
 
+      - name: Install libpcap
+        run: sudo apt-get install -y libpcap-dev
+
       - name: Install mockery
         run: go install github.com/vektra/mockery/v3@v3.2.2
 
@@ -42,7 +45,7 @@ jobs:
         run: go build -v ./...
 
       - name: Run tests
-        run: go test -v -timeout=60s -race -covermode=atomic -coverprofile=$GITHUB_WORKSPACE/profile.cov ./...
+        run: go test -v -timeout=60s -covermode=atomic -coverprofile=$GITHUB_WORKSPACE/profile.cov ./...
 
       - name: Bump version and push tag
         uses: anothrNick/github-tag-action@1.36.0

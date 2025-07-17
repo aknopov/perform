@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aknopov/perform/mocker"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -143,7 +144,7 @@ func TestFindActiveDevices(t *testing.T) {
 }
 
 func TestFindActiveDevicesFail(t *testing.T) {
-	defer replaceGlobalVar(&errChan, make(chan error))()
+	defer mocker.ReplaceItem(&errChan, make(chan error))()
 
 	mockFindDev := func() ([]pcap.Interface, error) {
 		return []pcap.Interface{}, errors.New("test")
@@ -195,7 +196,7 @@ func TestSortAddresses(t *testing.T) {
 }
 
 func TestProcessPacket(t *testing.T) {
-	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
+	defer mocker.ReplaceItem(&procConnMap, make(map[net.Addr]*procNetStat))()
 
 	mockDev := pcap.Interface{Name: "tst", Addresses: []pcap.InterfaceAddress{{IP: sysnet.IP{192, 168, 0, 235}, Netmask: sysnet.IPMask{255, 255, 255, 255}}}}
 	expAddr := net.Addr{IP: "192.168.0.235", Port: 20781}

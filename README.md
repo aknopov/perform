@@ -1,6 +1,6 @@
 # Problem Setup
 
-Consider a scenario where you need to evaluate the performance impact of a code change in a service. When isolating the code for testing is impractical or requires extensive refactoring, integration testing becomes the only viable option. Typically, the service under test depends on other services. During periods of waiting for responses, the service does not utilize the CPU, which can skew statistics of response latencies (e.g., results of Go benchmarking or Gatling for Java). 
+Consider a scenario where you need to evaluate the performance impact of a code change in a service. When isolating the code for testing is impractical or requires extensive refactoring, integration testing becomes the only viable option. Typically, the service under test depends on other services. During periods of waiting for responses, the service does not utilize the CPU, which can skew statistics of response latencies (e.g., results of Go benchmarking or Gatling for Java).
 
 The goal of this project is to identify common metrics available across most operating systems and CPU architectures that can provide meaningful performance insights and be integrated into a CI/CD pipeline.
 
@@ -46,7 +46,7 @@ The project provides two similar utilities for measuring performance metrics:
 
 These utilities produce uniform output similar to `top -b -d1 -p $pid` on Linux or `docker stats $cid`. Both utilities continue measuring until the process or Docker container exits. The measurement frequency is controlled by the `-refresh` command-line parameter, which supports fractional values of a second.
 
-Metrics are specified using the `-params` command-line option. For example:  
+Metrics are specified using the `-params` command-line option. For example:
 `./proc-stat -params=CPU,PIDs,Cyc`
 
 Available parameters include:
@@ -58,6 +58,10 @@ Available parameters include:
 - `Rx`: Total network read bytes.
 - `Tx`: Total network write bytes.
 - `Cyc`: Total CPU cycles spent by the process (proportional to `CpuPerc`).
+
+**Notes on "proc-stat" utility**
+1. The utility uses google/gopacket library that requires `libpcap` C library. You can install it with `sudo apt-get install -y libpcap-dev` on Debian systems.
+2. Running proc-stat on Linux requires either using `sudo` or changing program capabilities with `sudo setcap cap_net_admin=eip cap_net_raw=eip proc-stat`
 
 ## Performance Test Tips
 

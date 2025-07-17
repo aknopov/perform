@@ -3,10 +3,12 @@ package net
 import (
 	"context"
 	"errors"
-	"strings"
+	"regexp"
 	"testing"
 	"time"
 
+	"github.com/aknopov/perform/mocker"
+	"github.com/google/gopacket/pcap"
 	"github.com/shirou/gopsutil/v4/net"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,21 +35,22 @@ func mockConnsProvider(_ context.Context, _ string) ([]net.ConnectionStat, error
 }
 
 func TestSingleStartInvocation(t *testing.T) {
-	defer replaceGlobalVar(&procConnMap, nil)()
+	defer mocker.ReplaceItem(&procConnMap, nil)()
+	defer mocker.ReplaceItem(&findAllDevs, func() ([]pcap.Interface, error) { return []pcap.Interface{}, nil })
 
 	var errChan chan error
 
-	ctx, cancel1 := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	assert.NotPanics(t, func() { errChan = StartTracing(ctx, 1, time.Millisecond) })
-	cancel1()
+	cancel()
+	assert.Eventually(t, func() bool { <-ctx.Done(); return true }, time.Second, 10*time.Millisecond)
 
-	ctx, cancel2 := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	assert.Panics(t, func() { errChan = StartTracing(ctx, 1, time.Millisecond) })
-	cancel2()
+	assert.Panics(t, func() { errChan = StartTracing(context.Background(), 1, time.Millisecond) })
 
 	select {
 	case err := <-errChan:
-		if !strings.Contains(err.Error(), "You don't have permission to capture on that device") {
+		rex := regexp.MustCompile("You don't have permission to.*capture on that device")
+		if !rex.MatchString(err.Error()) {
 			t.Fatalf("No error expected - got %v", err)
 		}
 	case <-time.After(50 * time.Millisecond):
@@ -55,8 +58,8 @@ func TestSingleStartInvocation(t *testing.T) {
 }
 
 func TestGetProcConnMapCopy(t *testing.T) {
-	defer replaceGlobalVar(&tIdx, 0)()
-	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
+	defer mocker.ReplaceItem(&tIdx, 0)()
+	defer mocker.ReplaceItem(&procConnMap, make(map[net.Addr]*procNetStat))()
 
 	updateTable(context.Background(), 111, mockConnsProvider, expire)
 	updateTable(context.Background(), 111, mockConnsProvider, expire)
@@ -79,8 +82,8 @@ func TestGetProcessNetIOCounters(t *testing.T) {
 	testTab[net.Addr{IP: "192.168.0.235", Port: 20781}] = createNetStat(111, stat1)
 	testTab[net.Addr{IP: "127.0.0.1", Port: 22137}] = createNetStat(111, stat2)
 	testTab[net.Addr{IP: "192.168.0.235", Port: 20675}] = createNetStat(411, stat3)
-	defer replaceGlobalVar(&procConnMap, testTab)()
-	defer replaceGlobalVar(&pid, 111)()
+	defer mocker.ReplaceItem(&procConnMap, testTab)()
+	defer mocker.ReplaceItem(&pid, 111)()
 
 	counts, err := GetProcessNetIOCounters()
 	require.NoError(t, err)
@@ -91,14 +94,14 @@ func TestGetProcessNetIOCounters(t *testing.T) {
 	assert.Zero(t, counts.Errin)
 	assert.Zero(t, counts.Errout)
 
-	defer replaceGlobalVar(&pid, 777)()
+	defer mocker.ReplaceItem(&pid, 777)()
 	_, err = GetProcessNetIOCounters()
 	assert.Error(t, err)
 }
 
 func TestConnMapRefresh(t *testing.T) {
-	defer replaceGlobalVar(&tIdx, 0)()
-	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
+	defer mocker.ReplaceItem(&tIdx, 0)()
+	defer mocker.ReplaceItem(&procConnMap, make(map[net.Addr]*procNetStat))()
 
 	assert.Empty(t, procConnMap)
 
@@ -127,7 +130,7 @@ func TestConnMapRefresh(t *testing.T) {
 
 func TestHandlingErrorsOnRefresh(t *testing.T) {
 	testErrChan := make(chan error)
-	defer replaceGlobalVar(&errChan, testErrChan)()
+	defer mocker.ReplaceItem(&errChan, testErrChan)()
 
 	mockConnProvider := func(_ context.Context, _ string) ([]net.ConnectionStat, error) { return nil, errors.New("test") }
 
@@ -137,7 +140,7 @@ func TestHandlingErrorsOnRefresh(t *testing.T) {
 }
 
 func BenchmarkUpdateTable(b *testing.B) {
-	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
+	defer mocker.ReplaceItem(&procConnMap, make(map[net.Addr]*procNetStat))()
 
 	b.ResetTimer()
 
@@ -147,17 +150,11 @@ func BenchmarkUpdateTable(b *testing.B) {
 }
 
 func BenchmarkGetProcConnMapCopy(b *testing.B) {
-	defer replaceGlobalVar(&procConnMap, make(map[net.Addr]*procNetStat))()
+	defer mocker.ReplaceItem(&procConnMap, make(map[net.Addr]*procNetStat))()
 
 	b.ResetTimer()
 
 	for range b.N {
 		getProcConnMapCopy()
 	}
-}
-
-func replaceGlobalVar[T any](target *T, replacement T) func() {
-	saveVal := *target
-	*target = replacement
-	return func() { *target = saveVal }
 }
