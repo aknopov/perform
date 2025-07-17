@@ -130,7 +130,7 @@ func addTransientConn(srcAddr *net.Addr, dstAddr *net.Addr, dev *pcap.Interface)
 		return nil
 	}
 
-	procConnMap[*lclAddr] = createNetStat(-1, *rmtAddr, IOCountersStat{})
+	procConnMap[*lclAddr] = createNetStat(-1, IOCountersStat{})
 	return lclAddr
 }
 

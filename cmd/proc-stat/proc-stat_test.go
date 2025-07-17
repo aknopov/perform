@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -111,6 +114,22 @@ func TestIsProcessAliveFail(t *testing.T) {
 
 	assertT.False(isProcessAlive(123))
 }
+
+func TestWatchErrors(t *testing.T) {
+	assertT := assert.New(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	eChan := make(chan error)
+	tstOut := bytes.Buffer{}
+
+	go watchErrors(ctx, eChan, &tstOut)
+	eChan <- errors.New("a message")
+	cancel()
+	time.Sleep(2 * ERROR_WAIT)
+
+	assertT.True(strings.Contains(tstOut.String(), "a message"))
+}
+
 func TestNetIO(t *testing.T) {
 	assertT := assert.New(t)
 

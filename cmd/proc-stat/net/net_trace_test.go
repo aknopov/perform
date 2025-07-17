@@ -76,10 +76,9 @@ func TestGetProcessNetIOCounters(t *testing.T) {
 	stat1 := IOCountersStat{BytesSent: 111, BytesRecv: 222, PacketsSent: 3, PacketsRecv: 4}
 	stat2 := IOCountersStat{BytesSent: 333, BytesRecv: 44, PacketsSent: 2, PacketsRecv: 2}
 	stat3 := IOCountersStat{BytesSent: 444, BytesRecv: 57, PacketsSent: 5, PacketsRecv: 7}
-	rAddr := net.Addr{IP: "172.217.165.14", Port: 443}
-	testTab[net.Addr{IP: "192.168.0.235", Port: 20781}] = createNetStat(111, rAddr, stat1)
-	testTab[net.Addr{IP: "127.0.0.1", Port: 22137}] = createNetStat(111, rAddr, stat2)
-	testTab[net.Addr{IP: "192.168.0.235", Port: 20675}] = createNetStat(411, rAddr, stat3)
+	testTab[net.Addr{IP: "192.168.0.235", Port: 20781}] = createNetStat(111, stat1)
+	testTab[net.Addr{IP: "127.0.0.1", Port: 22137}] = createNetStat(111, stat2)
+	testTab[net.Addr{IP: "192.168.0.235", Port: 20675}] = createNetStat(411, stat3)
 	defer replaceGlobalVar(&procConnMap, testTab)()
 	defer replaceGlobalVar(&pid, 111)()
 
@@ -135,23 +134,6 @@ func TestHandlingErrorsOnRefresh(t *testing.T) {
 	go updateTable(context.Background(), -1, mockConnProvider, time.Second)
 
 	assert.Error(t, <-testErrChan)
-}
-
-func TestGuessPidByRemote(t *testing.T) {
-	testTab := make(map[net.Addr]*procNetStat)
-	rAddr := net.Addr{IP: "104.18.138.67", Port: 443}
-	lAddr := net.Addr{IP: "192.168.0.235", Port: 20781}
-	lAddr2 := net.Addr{IP: "192.168.0.235", Port: 21326}
-	testTab[lAddr] = createNetStat(-1, rAddr, IOCountersStat{})
-	defer replaceGlobalVar(&procConnMap, testTab)()
-
-	mockConnections := []net.ConnectionStat{{Pid: 123, Raddr: rAddr, Laddr: lAddr2}}
-
-	assert.EqualValues(t, -1, testTab[lAddr].pid)
-
-	guessPidByRemote(mockConnections)
-
-	assert.EqualValues(t, 123, testTab[lAddr].pid)
 }
 
 func BenchmarkUpdateTable(b *testing.B) {

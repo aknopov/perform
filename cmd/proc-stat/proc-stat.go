@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"slices"
@@ -24,6 +25,7 @@ var (
 	NO_TIMESTAT = &cpu.TimesStat{}
 	NO_MEMSTAT  = &process.MemoryInfoStat{}
 	NO_NET_IO   = &net.IOCountersStat{}
+	ERROR_WAIT  = 100 * time.Millisecond
 )
 
 // Function substitutions for unit tests
@@ -57,22 +59,22 @@ func main() {
 
 	if slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx) {
 		errChan := net.StartTracing(context.Background(), p.Pid, refreshPeriod/2)
-		go watchErrors(context.Background(), errChan)
+		go watchErrors(context.Background(), errChan, os.Stderr)
 	}
 
 	pm.PrintHeader(os.Stdout, paramList)
 	pollStats(pm.NewQProcess(p), paramList, refreshPeriod)
 }
 
-func watchErrors(ctx context.Context, errChan chan error) {
+func watchErrors(ctx context.Context, errChan chan error, sink io.Writer) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case err := <-errChan:
-			fmt.Fprintf(os.Stderr, "\x1b[35m%v\x1b[0m\n", err)
+			fmt.Fprintf(sink, "\x1b[35m%v\x1b[0m\n", err) //nolint:errcheck
 		default:
-			time.Sleep(time.Second)
+			time.Sleep(ERROR_WAIT)
 		}
 	}
 }
@@ -91,6 +93,7 @@ func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Dur
 
 	for range ticker.C {
 		if !isProcessAlive(int(proc.GetPID())) {
+			fmt.Fprintln(os.Stderr, "\x1b[31mProcess terminated\x1b[0m")
 			break
 		}
 

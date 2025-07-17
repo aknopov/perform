@@ -23,7 +23,6 @@ type IOCountersStat struct {
 type procNetStat struct {
 	pid         int32          // process PID
 	netCounters IOCountersStat // process network counters
-	remoteAddr  net.Addr       // remote address
 	lastUpdate  time.Time      // last updated
 	lock        *sync.Mutex    // modifications guard
 }
@@ -80,8 +79,8 @@ func GetProcessNetIOCounters() (*IOCountersStat, error) {
 	return ret, err
 }
 
-func createNetStat(pid int32, remoteAddr net.Addr, netCounters IOCountersStat) *procNetStat {
-	return &procNetStat{pid: pid, remoteAddr: remoteAddr, netCounters: netCounters, lastUpdate: time.Now(), lock: new(sync.Mutex)}
+func createNetStat(pid int32, netCounters IOCountersStat) *procNetStat {
+	return &procNetStat{pid: pid, netCounters: netCounters, lastUpdate: time.Now(), lock: new(sync.Mutex)}
 }
 
 func sumStats(stat1 *IOCountersStat, stat2 *IOCountersStat) {
@@ -137,14 +136,11 @@ func updateTable(ctx context.Context, pid int32, connProvider connProviderF, exp
 
 	connMapLock.Lock()
 
-	ntrans := 0
 	// remove entries for closed connections
 	for a, ps := range procConnMap {
 		ps.lock.Lock()
 		if _, ok := tempAddrMap[a]; !ok && ps.pid == -1 && time.Since(ps.lastUpdate) > expiry {
 			delete(procConnMap, a)
-		} else if ok && ps.pid == -1 {
-			ntrans++
 		}
 		ps.lock.Unlock()
 	}
@@ -153,38 +149,11 @@ func updateTable(ctx context.Context, pid int32, connProvider connProviderF, exp
 	for a, c := range tempAddrMap {
 		ps, ok := procConnMap[a]
 		if !ok {
-			procConnMap[a] = createNetStat(c.Pid, c.Raddr, IOCountersStat{})
+			procConnMap[a] = createNetStat(c.Pid, IOCountersStat{})
 		} else if ps.pid == -1 {
 			ps.pid = c.Pid
-			ntrans--
 		}
 	}
 
 	connMapLock.Unlock()
-
-	// Deal with remained transient connections
-	if ntrans > 0 {
-		guessPidByRemote(conns)
-	}
-}
-
-// Here we are doing "best effort" to figure process for a connection when it is opened and closed in between two polls.
-// Pid is guessed by assuming that the application connects to the same remote endpoint repeatedly.
-// (This will be invalid if several applications connect to the same endpoint - hence the "guess")
-func guessPidByRemote(conns []net.ConnectionStat) {
-	tempAddrMap := make(map[net.Addr]net.ConnectionStat)
-	for _, conn := range conns {
-		tempAddrMap[conn.Raddr] = conn
-	}
-
-	connMapLock.RLock()
-	defer connMapLock.RUnlock()
-
-	for _, ps := range procConnMap {
-		if ps.pid == -1 {
-			if ar, ok := tempAddrMap[ps.remoteAddr]; ok {
-				ps.pid = ar.Pid
-			}
-		}
-	}
 }
