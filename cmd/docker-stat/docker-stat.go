@@ -31,6 +31,8 @@ func main() {
 
 	apiClient := assertNoErr(client.NewClientWithOpts(client.FromEnv, client.WithVersion("1.47")))
 	dockerInfo := assertNoErr(apiClient.Info(context.Background()))
+	summary := assertNoErr(getContainerInfo(apiClient, containerId))
+	fmt.Printf("Getting performance data for the container '%s' (id=%s)\n\n", summary.Names[0], summary.ID)
 
 	param.PrintHeader(os.Stdout, paramList)
 	pollStats(paramList, refreshPeriod, apiClient, &dockerInfo, containerId)
@@ -41,7 +43,7 @@ func pollStats(paramList param.ParamList, refreshPeriod time.Duration, apiClient
 	values := make([]float64, len(paramList))
 	ticker := time.NewTicker(refreshPeriod)
 	for range ticker.C {
-		stats := assertNoErr(getContainerInfo(apiClient, containerId))
+		stats := assertNoErr(getContainerStats(apiClient, containerId))
 		if !isContainerAlive(stats) {
 			break
 		}
@@ -62,7 +64,22 @@ func assertNoErr[T any](val T, err error) T {
 	return val
 }
 
-func getContainerInfo(apiClient client.ContainerAPIClient, containerId string) (*container.StatsResponse, error) {
+func getContainerInfo(apiClient client.ContainerAPIClient, containerId string) (*container.Summary, error) {
+	containers, err := apiClient.ContainerList(context.Background(), container.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ctr := range containers {
+		if ctr.ID == containerId || len(ctr.Names) > 0 && ctr.Names[0] == containerId {
+			return &ctr, nil
+		}
+	}
+
+	return nil, fmt.Errorf("container '%s' not found", containerId)
+}
+
+func getContainerStats(apiClient client.ContainerAPIClient, containerId string) (*container.StatsResponse, error) {
 	resp, err := apiClient.ContainerStatsOneShot(context.Background(), containerId)
 	if err != nil {
 		return nil, err
