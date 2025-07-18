@@ -3,16 +3,14 @@ package param
 import (
 	"time"
 
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/net"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // In leu of interface(s) in "gopsutil" library - only necessary methods
 type IQProcess interface {
 	GetPID() int32
 	MemoryInfo() (*process.MemoryInfoStat, error)
-	NetIOCounters(pernic bool) ([]net.IOCountersStat, error)
 	NumThreads() (int32, error)
 	Times() (*cpu.TimesStat, error)
 	Percent(time.Duration) (float64, error)

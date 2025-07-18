@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"slices"
@@ -12,17 +14,18 @@ import (
 	"github.com/aknopov/perform"
 	"github.com/aknopov/perform/cmd/cpushare"
 	pm "github.com/aknopov/perform/cmd/param"
+	"github.com/aknopov/perform/cmd/proc-stat/net"
 
 	ps "github.com/mitchellh/go-ps"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/net"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 var (
 	NO_TIMESTAT = &cpu.TimesStat{}
 	NO_MEMSTAT  = &process.MemoryInfoStat{}
-	NO_NET_IO   = []net.IOCountersStat{}
+	NO_NET_IO   = &net.IOCountersStat{}
+	ERROR_WAIT  = 100 * time.Millisecond
 )
 
 // Function substitutions for unit tests
@@ -45,11 +48,35 @@ func main() {
 
 	// hostInfo := perform.AssertNoErr(host.Info())
 
-	pid := getProcPid(procId)
+	pid, cmd := getProcIds(procId)
+	if pid == -1 {
+		fmt.Fprintf(os.Stderr, "Can't find process with PID or command line '%s'\n", procId)
+		os.Exit(1)
+	}
+
 	p, _ := process.NewProcess(int32(pid))
+	fmt.Printf("Getting performance data for the process '%s' (pid=%d)\n\n", cmd, pid)
+
+	if slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx) {
+		errChan := net.StartTracing(context.Background(), p.Pid, refreshPeriod/2)
+		go watchErrors(context.Background(), errChan, os.Stderr)
+	}
 
 	pm.PrintHeader(os.Stdout, paramList)
 	pollStats(pm.NewQProcess(p), paramList, refreshPeriod)
+}
+
+func watchErrors(ctx context.Context, errChan chan error, sink io.Writer) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errChan:
+			fmt.Fprintf(sink, "\x1b[35m%v\x1b[0m\n", err) //nolint:errcheck
+		default:
+			time.Sleep(ERROR_WAIT)
+		}
+	}
 }
 
 func reduceArg[A any, R any](f func(A) (R, error), arg A) func() (R, error) {
@@ -58,31 +85,31 @@ func reduceArg[A any, R any](f func(A) (R, error), arg A) func() (R, error) {
 
 func pollStats(proc pm.IQProcess, paramList pm.ParamList, refreshPeriod time.Duration) {
 
-	getProcNetFn := reduceArg(proc.NetIOCounters, false)
 	queryNet := slices.Contains(paramList, pm.Rx) || slices.Contains(paramList, pm.Tx)
-	netInfo := NO_NET_IO
+	var netStat *net.IOCountersStat
 
 	ticker := time.NewTicker(refreshPeriod)
 	values := make([]float64, len(paramList))
 
 	for range ticker.C {
 		if !isProcessAlive(int(proc.GetPID())) {
+			fmt.Fprintln(os.Stderr, "\x1b[31mProcess terminated\x1b[0m")
 			break
 		}
 
 		if queryNet {
-			netInfo = perform.AssumeOnErr(getProcNetFn, NO_NET_IO)
+			netStat = perform.IgnoreErr(net.GetProcessNetIOCounters, NO_NET_IO)
 		}
 
 		for i, p := range paramList {
-			values[i] = getValue(proc, netInfo, p)
+			values[i] = getValue(proc, netStat, p)
 		}
 
 		pm.PrintValues(os.Stdout, paramList, values)
 	}
 }
 
-func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) float64 {
+func getValue(proc pm.IQProcess, netStat *net.IOCountersStat, p pm.ParamType) float64 {
 
 	provideCpuPerc := func() float64 { return perform.AssumeOnErr(reduceArg(proc.Percent, 0), 0) / float64(getNumCPU()) }
 	switch p {
@@ -99,17 +126,9 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 	case pm.PIDs:
 		return float64(perform.AssumeOnErr(proc.NumThreads, -1))
 	case pm.Tx:
-		var txBytes uint64
-		for _, ni := range netInfo {
-			txBytes += ni.BytesSent
-		}
-		return float64(txBytes) / 1024
+		return float64(netStat.BytesSent) / 1024
 	case pm.Rx:
-		var rxBytes uint64
-		for _, ni := range netInfo {
-			rxBytes += ni.BytesRecv
-		}
-		return float64(rxBytes) / 1024
+		return float64(netStat.BytesRecv) / 1024
 	case pm.Cyc:
 		return cpushare.GetProcCycles(provideCpuPerc)
 	default:
@@ -117,23 +136,20 @@ func getValue(proc pm.IQProcess, netInfo []net.IOCountersStat, p pm.ParamType) f
 	}
 }
 
-func getProcPid(cmd string) int {
+func getProcIds(cmd string) (int, string) {
 	procList := perform.AssertNoErr(getProcessList())
 
 	pid, err := strconv.Atoi(cmd)
 
 	for _, p := range procList {
 		if err == nil && pid == p.Pid() {
-			return pid
+			return pid, p.Executable()
 		} else if strings.Contains(p.Executable(), cmd) {
-			return p.Pid()
+			return p.Pid(), p.Executable()
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Can't find process with PID or command line '%s'\n", cmd)
-	os.Exit(1)
-
-	return -1
+	return -1, ""
 }
 
 func isProcessAlive(pid int) bool {

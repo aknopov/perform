@@ -105,6 +105,13 @@ func TestRunTest(t *testing.T) {
 	assertT.GreaterOrEqual(oneStat.MinTime, float64(SleepTime)/msecFctr)
 }
 
+func TestIgnoreErr(t *testing.T) {
+	assertT := assert.New(t)
+
+	assertT.Equal(1, IgnoreErr(func() (int, error) { return 1, nil }, -1))
+	assertT.Equal(-1, IgnoreErr(func() (int, error) { return 0, errTest }, -1))
+}
+
 func TestAssertNoErr(t *testing.T) {
 	assertT := assert.New(t)
 
